@@ -207,22 +207,42 @@ export const db = {
     },
 
     async getLeadByEmail(email) {
-        const { data, error } = await supabase
-            .from('leads')
-            .select('*')
-            .ilike('email', email)
-            .single();
-        if (error && error.code !== 'PGRST116') throw error;
-        return data;
+        if (!email || email.length < 3) return null;
+        try {
+            const { data, error } = await supabase
+                .from('leads')
+                .select('id, email')
+                .ilike('email', email)
+                .limit(1)
+                .maybeSingle();
+            if (error) {
+                console.error('getLeadByEmail error:', error);
+                return null;
+            }
+            return data;
+        } catch (err) {
+            console.error('getLeadByEmail exception:', err);
+            return null;
+        }
     },
 
     async getLeadByPhone(phoneEnd) {
-        const { data, error } = await supabase
-            .from('leads')
-            .select('*')
-            .ilike('phone', `%${phoneEnd}`);
-        if (error) throw error;
-        return data?.[0] || null;
+        if (!phoneEnd || phoneEnd.length < 8) return null;
+        try {
+            const { data, error } = await supabase
+                .from('leads')
+                .select('id, phone')
+                .ilike('phone', `%${phoneEnd}`)
+                .limit(1);
+            if (error) {
+                console.error('getLeadByPhone error:', error);
+                return null;
+            }
+            return data?.[0] || null;
+        } catch (err) {
+            console.error('getLeadByPhone exception:', err);
+            return null;
+        }
     },
 
     async createLead(leadData) {

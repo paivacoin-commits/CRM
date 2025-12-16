@@ -260,6 +260,7 @@ router.post('/import/leads', async (req, res) => {
                 }
 
                 if (existing) {
+                    console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}`);
                     if (update_existing) {
                         await db.updateLeadById(existing.id, {
                             first_name: leadNome || existing.first_name || 'Sem nome',
@@ -282,6 +283,7 @@ router.post('/import/leads', async (req, res) => {
                     sellerIndex++;
                 }
 
+                console.log(`✅ Criando lead: ${leadNome} - ${leadEmail} - ${leadPhone}`);
                 await db.createLead({
                     uuid: uuidv4(),
                     first_name: leadNome || 'Sem nome',
@@ -297,7 +299,7 @@ router.post('/import/leads', async (req, res) => {
                 });
                 imported++;
             } catch (err) {
-                console.error('Error importing lead:', err);
+                console.error('❌ Error importing lead:', err);
                 skipped++;
             }
         }
