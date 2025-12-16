@@ -240,6 +240,11 @@ router.post('/import/leads', async (req, res) => {
             sellers = await db.getActiveSellersInDistribution();
         }
 
+        // Buscar o primeiro status disponível (para novos leads)
+        const defaultStatus = await db.getDefaultStatus();
+        const defaultStatusId = defaultStatus?.id || 1;
+        console.log(`📌 Status padrão para novos leads: id=${defaultStatusId}`);
+
         for (const lead of leadsToImport) {
             try {
                 const leadEmail = (lead.email || lead.Email || '').trim().toLowerCase();
@@ -295,7 +300,7 @@ router.post('/import/leads', async (req, res) => {
                     phone: leadPhone,
                     product_name: leadProduto,
                     seller_id: assignedSellerId,
-                    status_id: 1,
+                    status_id: defaultStatusId,
                     source: 'import',
                     campaign_id,
                     in_group,

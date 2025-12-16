@@ -245,6 +245,20 @@ export const db = {
         }
     },
 
+    async getDefaultStatus() {
+        const { data, error } = await supabase
+            .from('lead_statuses')
+            .select('id, name')
+            .order('display_order', { ascending: true })
+            .limit(1)
+            .single();
+        if (error && error.code !== 'PGRST116') {
+            console.error('getDefaultStatus error:', error);
+            return null;
+        }
+        return data;
+    },
+
     async createLead(leadData) {
         const { data, error } = await supabase
             .from('leads')
