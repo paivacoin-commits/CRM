@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import SellerSettings from './pages/SellerSettings';
 import Campaigns from './pages/Campaigns';
 import Layout from './components/Layout';
 
@@ -27,6 +28,7 @@ export default function App() {
                     <Route path="/users" element={<PrivateRoute adminOnly><Layout><Users /></Layout></PrivateRoute>} />
                     <Route path="/campaigns" element={<PrivateRoute adminOnly><Layout><Campaigns /></Layout></PrivateRoute>} />
                     <Route path="/settings" element={<PrivateRoute adminOnly><Layout><Settings /></Layout></PrivateRoute>} />
+                    <Route path="/my-settings" element={<PrivateRoute><Layout><SellerSettings /></Layout></PrivateRoute>} />
                 </Routes>
             </BrowserRouter>
         </AuthProvider>

@@ -18,13 +18,15 @@ async function request(endpoint, options = {}) {
 export const api = {
     login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
     getMe: () => request('/auth/me'),
-    getDashboard: () => request('/dashboard'),
+    getDashboard: (params = {}) => request(`/dashboard?${new URLSearchParams(params)}`),
     getLeads: (params = {}) => request(`/leads?${new URLSearchParams(params)}`),
     getLead: (uuid) => request(`/leads/${uuid}`),
     getStatuses: () => request('/leads/statuses'),
     updateLeadStatus: (uuid, status_id) => request(`/leads/${uuid}/status`, { method: 'PATCH', body: JSON.stringify({ status_id }) }),
     addObservation: (uuid, observation) => request(`/leads/${uuid}/observation`, { method: 'PATCH', body: JSON.stringify({ observation }) }),
     updateLeadInGroup: (uuid, in_group) => request(`/leads/${uuid}/in-group`, { method: 'PATCH', body: JSON.stringify({ in_group }) }),
+    updateLeadChecking: (uuid, checking) => request(`/leads/${uuid}/checking`, { method: 'PATCH', body: JSON.stringify({ checking }) }),
+    updateLeadSaleCompleted: (uuid, sale_completed) => request(`/leads/${uuid}/sale-completed`, { method: 'PATCH', body: JSON.stringify({ sale_completed }) }),
     deleteLead: (uuid) => request(`/leads/${uuid}`, { method: 'DELETE' }),
     deleteLeadsBulk: (lead_uuids) => request('/leads/bulk', { method: 'DELETE', body: JSON.stringify({ lead_uuids }) }),
     getAllLeadUuids: (params = {}) => request(`/leads/all-uuids?${new URLSearchParams(params)}`),
@@ -57,4 +59,9 @@ export const api = {
     updateStatus: (id, data) => request(`/statuses/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteStatus: (id) => request(`/statuses/${id}`, { method: 'DELETE' }),
     updateStatusOrder: (order) => request('/statuses/order', { method: 'PUT', body: JSON.stringify({ order }) }),
+    // WhatsApp Templates
+    getWhatsAppTemplates: () => request('/whatsapp-templates'),
+    createWhatsAppTemplate: (data) => request('/whatsapp-templates', { method: 'POST', body: JSON.stringify(data) }),
+    updateWhatsAppTemplate: (uuid, data) => request(`/whatsapp-templates/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteWhatsAppTemplate: (uuid) => request(`/whatsapp-templates/${uuid}`, { method: 'DELETE' }),
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 
 export default function Leads() {
     const { isAdmin } = useAuth();
@@ -17,6 +17,11 @@ export default function Leads() {
     const [observation, setObservation] = useState('');
     const [sellers, setSellers] = useState([]);
     const [sellerFilter, setSellerFilter] = useState('');
+
+    // WhatsApp templates
+    const [whatsappTemplates, setWhatsappTemplates] = useState([]);
+    const [showWhatsappModal, setShowWhatsappModal] = useState(false);
+    const [whatsappLead, setWhatsappLead] = useState(null);
 
     // Paginação
     const [page, setPage] = useState(1);
@@ -60,6 +65,7 @@ export default function Leads() {
     // Carregamento inicial
     useEffect(() => {
         api.getStatuses().then(d => setStatuses(d.statuses));
+        api.getWhatsAppTemplates().then(d => setWhatsappTemplates(d.templates || [])).catch(() => { });
         if (isAdmin) {
             api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
             api.getSellers().then(d => setSellers(d.sellers || []));
@@ -101,12 +107,48 @@ export default function Leads() {
         if (selectedLead?.uuid === uuid) setSelectedLead({ ...selectedLead, in_group: !current });
     };
 
+    const toggleChecking = async (uuid, current) => {
+        await api.updateLeadChecking(uuid, !current);
+        loadLeads();
+        if (selectedLead?.uuid === uuid) setSelectedLead({ ...selectedLead, checking: !current });
+    };
+
+    const toggleSaleCompleted = async (uuid, current) => {
+        await api.updateLeadSaleCompleted(uuid, !current);
+        loadLeads();
+        if (selectedLead?.uuid === uuid) setSelectedLead({ ...selectedLead, sale_completed: !current });
+    };
+
     const addObs = async () => {
         if (!observation.trim()) return;
         const result = await api.addObservation(selectedLead.uuid, observation);
         setSelectedLead({ ...selectedLead, observations: result.observations });
         setObservation('');
         loadLeads();
+    };
+
+    // WhatsApp functions
+    const openWhatsappModal = (lead) => {
+        setWhatsappLead(lead);
+        setShowWhatsappModal(true);
+    };
+
+    const sendWhatsappMessage = (template) => {
+        if (!whatsappLead?.phone) return;
+        const phone = whatsappLead.phone.replace(/\D/g, '');
+        let message = template.message
+            .replace(/{nome}/gi, whatsappLead.first_name || '')
+            .replace(/{produto}/gi, whatsappLead.product_name || '');
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+        setShowWhatsappModal(false);
+    };
+
+    const sendWhatsappDirect = () => {
+        if (!whatsappLead?.phone) return;
+        const phone = whatsappLead.phone.replace(/\D/g, '');
+        window.open(`https://wa.me/${phone}`, '_blank');
+        setShowWhatsappModal(false);
     };
 
     // Seleção individual
@@ -239,6 +281,8 @@ export default function Leads() {
                                 <th>Nome</th>
                                 <th>Contato</th>
                                 <th>Status</th>
+                                <th>Checking</th>
+                                <th>Venda</th>
                                 <th>Grupo</th>
                                 {isAdmin && <th>Campanha</th>}
                                 <th>Data</th>
@@ -264,15 +308,37 @@ export default function Leads() {
                                         </td>
                                         <td>
                                             {lead.phone ? (
-                                                <a href={`https://wa.me/${formatPhone(lead.phone)}`} target="_blank" rel="noopener" className="whatsapp-btn" style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+                                                <button
+                                                    onClick={() => openWhatsappModal(lead)}
+                                                    className="whatsapp-btn"
+                                                    style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none' }}
+                                                >
                                                     <Phone size={12} /> WhatsApp
-                                                </a>
+                                                </button>
                                             ) : '-'}
                                         </td>
                                         <td>
                                             <select className="form-select" style={{ width: 110, padding: '4px 8px', fontSize: '0.75rem' }} value={lead.status_id} onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}>
                                                 {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                             </select>
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={() => toggleChecking(lead.uuid, lead.checking)}
+                                                style={{ padding: 4 }}
+                                            >
+                                                {lead.checking ? <CheckSquare size={18} color="#10b981" /> : <Square size={18} color="#6b7280" />}
+                                            </button>
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <button
+                                                className="btn btn-ghost btn-sm"
+                                                onClick={() => toggleSaleCompleted(lead.uuid, lead.sale_completed)}
+                                                style={{ padding: 4 }}
+                                            >
+                                                {lead.sale_completed ? <CheckSquare size={18} color="#6366f1" /> : <Square size={18} color="#6b7280" />}
+                                            </button>
                                         </td>
                                         <td>
                                             <button
@@ -402,6 +468,126 @@ export default function Leads() {
                                 <textarea className="form-textarea" style={{ minHeight: 60 }} value={observation} onChange={e => setObservation(e.target.value)} placeholder="Digite sua observação..." />
                                 <button className="btn btn-primary" onClick={addObs} disabled={!observation.trim()}><Send size={16} /></button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* WhatsApp Template Modal */}
+            {showWhatsappModal && whatsappLead && (
+                <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowWhatsappModal(false); }}>
+                    <div className="modal slide-up" style={{ maxWidth: 420, padding: 0 }}>
+                        {/* Header Verde */}
+                        <div style={{
+                            background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                            padding: '20px 24px',
+                            borderRadius: '12px 12px 0 0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <h3 style={{ color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.1rem' }}>
+                                <MessageCircle size={22} /> Enviar WhatsApp
+                            </h3>
+                            <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => setShowWhatsappModal(false)}
+                                style={{ color: 'white', opacity: 0.9 }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ padding: 24 }}>
+                            <div style={{
+                                marginBottom: 20,
+                                padding: 12,
+                                background: 'var(--bg-primary)',
+                                borderRadius: 8,
+                                borderLeft: '4px solid #25D366'
+                            }}>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
+                                    Enviando para: <strong style={{ color: 'var(--text-primary)' }}>{whatsappLead.first_name}</strong>
+                                </p>
+                                {whatsappLead.product_name && (
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: '4px 0 0' }}>
+                                        Produto: {whatsappLead.product_name}
+                                    </p>
+                                )}
+                            </div>
+
+                            {whatsappTemplates.length > 0 ? (
+                                <>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 12, fontWeight: 500 }}>
+                                        Selecione um template:
+                                    </p>
+                                    <div style={{ display: 'grid', gap: 10, marginBottom: 20, maxHeight: 250, overflowY: 'auto' }}>
+                                        {whatsappTemplates.map(t => (
+                                            <button
+                                                key={t.uuid}
+                                                onClick={() => sendWhatsappMessage(t)}
+                                                style={{
+                                                    background: 'var(--bg-primary)',
+                                                    border: '1px solid var(--border)',
+                                                    borderRadius: 10,
+                                                    padding: '14px 16px',
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    width: '100%'
+                                                }}
+                                                onMouseOver={e => { e.currentTarget.style.borderColor = '#25D366'; e.currentTarget.style.background = 'rgba(37, 211, 102, 0.08)'; }}
+                                                onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-primary)'; }}
+                                            >
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                                    <MessageCircle size={16} color="#25D366" />
+                                                    <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{t.name}</strong>
+                                                </div>
+                                                <p style={{
+                                                    fontSize: '0.8rem',
+                                                    color: 'var(--text-secondary)',
+                                                    margin: 0,
+                                                    lineHeight: 1.4,
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {t.message.substring(0, 80)}...
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '24px 16px', color: 'var(--text-secondary)' }}>
+                                    <MessageCircle size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
+                                    <p style={{ fontSize: '0.9rem', margin: 0 }}>Nenhum template criado</p>
+                                    <p style={{ fontSize: '0.8rem', margin: '4px 0 0' }}>Crie templates em Configurações → WhatsApp</p>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={sendWhatsappDirect}
+                                style={{
+                                    width: '100%',
+                                    background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '14px 20px',
+                                    borderRadius: 10,
+                                    fontSize: '0.95rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 10
+                                }}
+                            >
+                                <Phone size={18} /> Abrir conversa direta
+                            </button>
                         </div>
                     </div>
                 </div>

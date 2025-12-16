@@ -19,8 +19,11 @@ router.use(authorize('admin'));
 router.get('/', async (req, res) => {
     try {
         const users = await db.getUsers();
-        res.json({
-            users: users.map(u => ({
+
+        // Buscar estatísticas de leads para cada usuário
+        const usersWithStats = await Promise.all(users.map(async (u) => {
+            const stats = await db.getUserLeadStats(u.id);
+            return {
                 id: u.id,
                 uuid: u.uuid,
                 name: u.name,
@@ -28,9 +31,13 @@ router.get('/', async (req, res) => {
                 role: u.role,
                 is_active: u.is_active,
                 is_in_distribution: u.is_in_distribution,
-                created_at: u.created_at
-            }))
-        });
+                created_at: u.created_at,
+                total_leads: stats.total_leads || 0,
+                conversions: stats.conversions || 0
+            };
+        }));
+
+        res.json({ users: usersWithStats });
     } catch (error) {
         console.error('Error fetching users:', error);
         res.status(500).json({ error: 'Erro ao buscar usuários' });

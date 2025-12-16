@@ -220,6 +220,64 @@ router.patch('/:uuid/in-group', async (req, res) => {
 });
 
 /**
+ * PATCH /api/leads/:uuid/checking
+ */
+router.patch('/:uuid/checking', async (req, res) => {
+    try {
+        const { uuid } = req.params;
+        const { checking } = req.body;
+
+        if (typeof checking !== 'boolean') {
+            return res.status(400).json({ error: 'checking deve ser boolean' });
+        }
+
+        const lead = await db.getLeadByUuid(uuid);
+        if (!lead) {
+            return res.status(404).json({ error: 'Lead não encontrado' });
+        }
+
+        if (req.user.role === 'seller' && lead.seller_id !== req.user.id) {
+            return res.status(403).json({ error: 'Sem permissão' });
+        }
+
+        await db.updateLead(uuid, { checking });
+        res.json({ message: 'Checking atualizado' });
+    } catch (error) {
+        console.error('Error updating checking:', error);
+        res.status(500).json({ error: 'Erro ao atualizar' });
+    }
+});
+
+/**
+ * PATCH /api/leads/:uuid/sale-completed
+ */
+router.patch('/:uuid/sale-completed', async (req, res) => {
+    try {
+        const { uuid } = req.params;
+        const { sale_completed } = req.body;
+
+        if (typeof sale_completed !== 'boolean') {
+            return res.status(400).json({ error: 'sale_completed deve ser boolean' });
+        }
+
+        const lead = await db.getLeadByUuid(uuid);
+        if (!lead) {
+            return res.status(404).json({ error: 'Lead não encontrado' });
+        }
+
+        if (req.user.role === 'seller' && lead.seller_id !== req.user.id) {
+            return res.status(403).json({ error: 'Sem permissão' });
+        }
+
+        await db.updateLead(uuid, { sale_completed });
+        res.json({ message: 'Venda atualizada' });
+    } catch (error) {
+        console.error('Error updating sale_completed:', error);
+        res.status(500).json({ error: 'Erro ao atualizar' });
+    }
+});
+
+/**
  * PATCH /api/leads/bulk/in-group (Admin only)
  */
 router.patch('/bulk/in-group', authorize('admin'), async (req, res) => {

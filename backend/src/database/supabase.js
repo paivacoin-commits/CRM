@@ -115,6 +115,33 @@ export const db = {
         if (error) throw error;
     },
 
+    async getUserLeadStats(userId) {
+        // Total de leads do usuário
+        const { count: total_leads } = await supabase
+            .from('leads')
+            .select('*', { count: 'exact', head: true })
+            .eq('seller_id', userId);
+
+        // Buscar status de conversão
+        const { data: conversionStatuses } = await supabase
+            .from('lead_statuses')
+            .select('id')
+            .eq('is_conversion', true);
+
+        let conversions = 0;
+        if (conversionStatuses && conversionStatuses.length > 0) {
+            const statusIds = conversionStatuses.map(s => s.id);
+            const { count } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('seller_id', userId)
+                .in('status_id', statusIds);
+            conversions = count || 0;
+        }
+
+        return { total_leads: total_leads || 0, conversions };
+    },
+
     // ==================== LEADS ====================
     async getLeads({ status, search, campaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
         let query = supabase

@@ -32,6 +32,11 @@ export default function Layout({ children }) {
                             </NavLink>
                         </>
                     )}
+                    {!isAdmin && (
+                        <NavLink to="/my-settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                            <Settings size={20} /> Configurações
+                        </NavLink>
+                    )}
                 </nav>
                 <div className="user-info">
                     <div className="user-name">{user?.name}</div>

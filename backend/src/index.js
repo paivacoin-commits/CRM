@@ -21,6 +21,7 @@ import settingsRoutes from './routes/settings.js';
 import campaignsRoutes from './routes/campaigns.js';
 import importsRoutes from './routes/imports.js';
 import statusesRoutes from './routes/statuses.js';
+import whatsappTemplatesRoutes from './routes/whatsappTemplates.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -44,6 +45,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/campaigns', campaignsRoutes);
 app.use('/api/imports', importsRoutes);
 app.use('/api/statuses', statusesRoutes);
+app.use('/api/whatsapp-templates', whatsappTemplatesRoutes);
 
 app.listen(PORT, () => {
     console.log(`🚀 CRM API running on http://localhost:${PORT}`);
