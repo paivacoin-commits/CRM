@@ -148,7 +148,7 @@ export const db = {
             .from('leads')
             .select(`
                 *,
-                lead_statuses!inner(id, name, color),
+                lead_statuses(id, name, color),
                 users(id, name),
                 campaigns(id, name)
             `, { count: 'exact' });
