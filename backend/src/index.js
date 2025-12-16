@@ -29,7 +29,33 @@ const PORT = process.env.PORT || 3001;
 initializeDatabase();
 
 const app = express();
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'], credentials: true }));
+
+// CORS - aceita localhost e qualquer .vercel.app
+const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    /\.vercel\.app$/,  // Aceita qualquer subdomínio do vercel.app
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // Permite requests sem origin (como mobile apps ou curl)
+        if (!origin) return callback(null, true);
+
+        // Verifica se a origin é permitida
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (allowed instanceof RegExp) return allowed.test(origin);
+            return allowed === origin;
+        });
+
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Em produção, aceita tudo por enquanto
+        }
+    },
+    credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Health check
