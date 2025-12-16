@@ -188,6 +188,7 @@ router.get('/export/leads', async (req, res) => {
  * POST /api/settings/import/leads
  */
 router.post('/import/leads', async (req, res) => {
+    console.log('📥 Import request received');
     try {
         const {
             leads,
@@ -199,6 +200,8 @@ router.post('/import/leads', async (req, res) => {
             update_existing = true,
             batch_name = null
         } = req.body;
+
+        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id });
 
         let leadsToImport = [];
 
