@@ -247,16 +247,20 @@ router.post('/import/leads', async (req, res) => {
                 const leadNome = lead.nome || lead.first_name || lead.name || lead.Nome || '';
                 const leadProduto = lead.produto || lead.product_name || lead.product || lead.Produto || '';
 
-                // Verificar se já existe
+                console.log(`📋 Processando lead: nome="${leadNome}", email="${leadEmail}", phone="${leadPhone}"`);
+
+                // Verificar se já existe - SIMPLIFICADO
                 let existing = null;
 
-                if (leadEmail && leadEmail.length > 3) {
+                if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
                     existing = await db.getLeadByEmail(leadEmail);
+                    if (existing) console.log(`   ↳ Encontrado por email: id=${existing.id}`);
                 }
 
-                if (!existing && leadPhone && leadPhone.length >= 8) {
+                if (!existing && leadPhone && leadPhone.length >= 10) {
                     const phoneEnd = leadPhone.slice(-8);
                     existing = await db.getLeadByPhone(phoneEnd);
+                    if (existing) console.log(`   ↳ Encontrado por phone: id=${existing.id}`);
                 }
 
                 if (existing) {
@@ -284,7 +288,7 @@ router.post('/import/leads', async (req, res) => {
                 }
 
                 console.log(`✅ Criando lead: ${leadNome} - ${leadEmail} - ${leadPhone}`);
-                await db.createLead({
+                const newLead = await db.createLead({
                     uuid: uuidv4(),
                     first_name: leadNome || 'Sem nome',
                     email: leadEmail,
@@ -297,9 +301,10 @@ router.post('/import/leads', async (req, res) => {
                     in_group,
                     import_batch_id: batch.id
                 });
+                console.log(`   ↳ Lead criado: id=${newLead?.id || 'N/A'}`);
                 imported++;
             } catch (err) {
-                console.error('❌ Error importing lead:', err);
+                console.error('❌ Error importing lead:', err.message || err);
                 skipped++;
             }
         }
