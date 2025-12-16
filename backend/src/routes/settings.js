@@ -300,7 +300,7 @@ router.post('/import/leads', async (req, res) => {
                     phone: leadPhone,
                     product_name: leadProduto,
                     seller_id: assignedSellerId,
-                    status_id: defaultStatusId,
+                    status_id: null, // Sem status inicial - será selecionado manualmente
                     source: 'import',
                     campaign_id,
                     in_group,

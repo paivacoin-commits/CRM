@@ -318,7 +318,8 @@ export default function Leads() {
                                             ) : '-'}
                                         </td>
                                         <td>
-                                            <select className="form-select" style={{ width: 110, padding: '4px 8px', fontSize: '0.75rem' }} value={lead.status_id} onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}>
+                                            <select className="form-select" style={{ width: 110, padding: '4px 8px', fontSize: '0.75rem' }} value={lead.status_id || ''} onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}>
+                                                {!lead.status_id && <option value="">- Selecione -</option>}
                                                 {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                             </select>
                                         </td>
