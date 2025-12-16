@@ -1,0 +1,21 @@
+# Arquivo de configuração do Render
+# Deploy automático do backend
+
+services:
+  - type: web
+    name: sales-recovery-crm-api
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
