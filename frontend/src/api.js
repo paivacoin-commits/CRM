@@ -1,4 +1,7 @@
-const API_URL = '/api';
+// Detecta automaticamente se está em produção ou desenvolvimento
+const API_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : 'https://crmsales-recovery-crm-api.onrender.com/api';
 
 async function request(endpoint, options = {}) {
     const token = localStorage.getItem('token');
