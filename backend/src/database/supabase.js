@@ -143,7 +143,7 @@ export const db = {
     },
 
     // ==================== LEADS ====================
-    async getLeads({ status, search, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
+    async getLeads({ status, search, search_observation, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
         let query = supabase
             .from('leads')
             .select(`
@@ -164,6 +164,10 @@ export const db = {
         if (in_group !== undefined) query = query.eq('in_group', in_group === 'true');
         if (search) {
             query = query.or(`first_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+        }
+        if (search_observation) {
+            // Busca nas observações (campo JSONB array)
+            query = query.ilike('observations', `%${search_observation}%`);
         }
 
         const offset = (page - 1) * limit;
@@ -755,6 +759,97 @@ export const db = {
                 .eq('id', lead.id);
         }
         console.log('   ↳ Restauração concluída');
+    },
+
+    // ==================== SCHEDULES ====================
+    async getSchedules({ lead_id, seller_id, upcoming_only, limit = 50 }) {
+        let query = supabase
+            .from('schedules')
+            .select(`
+                *,
+                leads!lead_id(id, uuid, first_name, phone, product_name),
+                users!created_by(id, name)
+            `)
+            .order('scheduled_at', { ascending: true });
+
+        if (lead_id) query = query.eq('lead_id', lead_id);
+        if (seller_id) {
+            // Buscar leads do seller e filtrar por eles
+            const { data: sellerLeads } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('seller_id', seller_id);
+            const leadIds = (sellerLeads || []).map(l => l.id);
+            if (leadIds.length > 0) {
+                query = query.in('lead_id', leadIds);
+            } else {
+                return [];
+            }
+        }
+        if (upcoming_only) {
+            query = query.gte('scheduled_at', new Date().toISOString()).eq('completed', false);
+        }
+        if (limit) query = query.limit(limit);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getSchedulesByLead(leadId) {
+        const { data, error } = await supabase
+            .from('schedules')
+            .select('*')
+            .eq('lead_id', leadId)
+            .order('scheduled_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createSchedule(scheduleData) {
+        const { data, error } = await supabase
+            .from('schedules')
+            .insert(scheduleData)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSchedule(uuid, scheduleData) {
+        const { data, error } = await supabase
+            .from('schedules')
+            .update({ ...scheduleData, updated_at: new Date().toISOString() })
+            .eq('uuid', uuid)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSchedule(uuid) {
+        const { error } = await supabase
+            .from('schedules')
+            .delete()
+            .eq('uuid', uuid);
+        if (error) throw error;
+    },
+
+    async hasScheduleOrObservation(leadId) {
+        // Verificar se lead tem agendamento ou observação
+        const { count: scheduleCount } = await supabase
+            .from('schedules')
+            .select('*', { count: 'exact', head: true })
+            .eq('lead_id', leadId);
+
+        const { data: lead } = await supabase
+            .from('leads')
+            .select('observations')
+            .eq('id', leadId)
+            .single();
+
+        const hasObservation = lead?.observations && lead.observations.length > 0;
+        return (scheduleCount || 0) > 0 || hasObservation;
     }
 };
 

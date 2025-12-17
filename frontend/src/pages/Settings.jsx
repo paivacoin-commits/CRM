@@ -404,8 +404,10 @@ function ImportLeads() {
     const [selectedSubcampaign, setSelectedSubcampaign] = useState('');
     const [distribute, setDistribute] = useState(false);
     const [inGroup, setInGroup] = useState(true);
+    const [preserveInGroup, setPreserveInGroup] = useState(false);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState(null);
+
     const fileInputRef = useRef(null);
 
     // Estados do modal de mapeamento
@@ -501,7 +503,13 @@ function ImportLeads() {
                 produto: mapping.produto ? row[mapping.produto] : ''
             }));
 
-            let data = { leads, distribute, in_group: inGroup, update_existing: true };
+            let data = {
+                leads,
+                distribute,
+                in_group: inGroup,
+                preserve_in_group: preserveInGroup,
+                update_existing: true
+            };
             if (selectedSeller && !distribute) data.seller_id = parseInt(selectedSeller);
             if (selectedCampaign) data.campaign_id = parseInt(selectedCampaign);
             if (selectedSubcampaign) data.subcampaign_id = parseInt(selectedSubcampaign);
@@ -592,7 +600,7 @@ function ImportLeads() {
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 16, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <label className="toggle">
                         <input type="checkbox" checked={distribute} onChange={e => setDistribute(e.target.checked)} />
@@ -603,10 +611,18 @@ function ImportLeads() {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <label className="toggle">
-                        <input type="checkbox" checked={inGroup} onChange={e => setInGroup(e.target.checked)} />
+                        <input type="checkbox" checked={inGroup} onChange={e => setInGroup(e.target.checked)} disabled={preserveInGroup} />
                         <span className="toggle-slider"></span>
                     </label>
-                    <span style={{ fontSize: '0.875rem' }}>Marcar como "No grupo"</span>
+                    <span style={{ fontSize: '0.875rem', opacity: preserveInGroup ? 0.5 : 1 }}>Marcar como "No grupo"</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <label className="toggle">
+                        <input type="checkbox" checked={preserveInGroup} onChange={e => setPreserveInGroup(e.target.checked)} />
+                        <span className="toggle-slider"></span>
+                    </label>
+                    <span style={{ fontSize: '0.875rem' }}>Não alterar "grupo" (manter atual)</span>
                 </div>
             </div>
 

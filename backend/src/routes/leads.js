@@ -15,7 +15,7 @@ router.use(authenticate);
  */
 router.get('/', async (req, res) => {
     try {
-        const { status, search, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 } = req.query;
+        const { status, search, search_observation, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 } = req.query;
 
         // Lógica de filtro de vendedor:
         // - Admin: vê todos, pode filtrar por seller_id
@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
         if (req.user.role === 'seller') {
             // Se está pesquisando, mostra todos os leads (pesquisa geral)
             // Caso contrário, mostra apenas os leads da vendedora
-            if (!search) {
+            if (!search && !search_observation) {
                 effectiveSellerId = req.user.id;
             }
             // Se pesquisar, effectiveSellerId fica null = mostra todos
@@ -38,6 +38,7 @@ router.get('/', async (req, res) => {
         const filters = {
             status,
             search,
+            search_observation,
             campaign_id,
             subcampaign_id,
             in_group,

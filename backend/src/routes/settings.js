@@ -198,6 +198,7 @@ router.post('/import/leads', async (req, res) => {
             campaign_id = null,
             subcampaign_id = null,
             in_group = true,
+            preserve_in_group = false,
             update_existing = true,
             batch_name = null
         } = req.body;
@@ -279,12 +280,16 @@ router.post('/import/leads', async (req, res) => {
                             sellerIndex++;
                         }
 
+
+
                         // Se está adicionando subcampanha, salvar status e checking antigos e limpar
+                        // Só atualiza campos se vieram preenchidos na importação
                         const updateData = {
-                            first_name: leadNome || existing.first_name || 'Sem nome',
-                            phone: leadPhone || existing.phone || '',
-                            product_name: leadProduto || existing.product_name || '',
-                            in_group,
+                            first_name: leadNome ? leadNome : existing.first_name || 'Sem nome',
+                            email: leadEmail ? leadEmail : existing.email || '',
+                            phone: leadPhone ? leadPhone : existing.phone || '',
+                            product_name: leadProduto ? leadProduto : existing.product_name || '',
+                            in_group: preserve_in_group ? existing.in_group : in_group,
                             campaign_id: campaign_id || existing.campaign_id,
                             subcampaign_id: subcampaign_id || existing.subcampaign_id,
                             seller_id: updateSellerId || existing.seller_id

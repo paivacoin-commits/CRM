@@ -72,4 +72,10 @@ export const api = {
     createSubcampaign: (data) => request('/subcampaigns', { method: 'POST', body: JSON.stringify(data) }),
     updateSubcampaign: (uuid, data) => request(`/subcampaigns/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSubcampaign: (uuid) => request(`/subcampaigns/${uuid}`, { method: 'DELETE' }),
+    // Schedules (Agendamentos)
+    getSchedules: (params = {}) => request(`/schedules?${new URLSearchParams(params)}`),
+    getLeadSchedules: (leadId) => request(`/schedules/lead/${leadId}`),
+    createSchedule: (data) => request('/schedules', { method: 'POST', body: JSON.stringify(data) }),
+    updateSchedule: (uuid, data) => request(`/schedules/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteSchedule: (uuid) => request(`/schedules/${uuid}`, { method: 'DELETE' }),
 };

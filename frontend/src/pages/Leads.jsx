@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle, Copy } from 'lucide-react';
+import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle, Copy, Calendar, FileText } from 'lucide-react';
 
 export default function Leads() {
     const { isAdmin, user } = useAuth();
@@ -11,6 +11,7 @@ export default function Leads() {
     const [subcampaigns, setSubcampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [searchByObservation, setSearchByObservation] = useState(false); // Toggle para pesquisa por observação
     const [statusFilter, setStatusFilter] = useState('');
     const [campaignFilter, setCampaignFilter] = useState('');
     const [subcampaignFilter, setSubcampaignFilter] = useState('');
@@ -24,6 +25,14 @@ export default function Leads() {
     const [whatsappTemplates, setWhatsappTemplates] = useState([]);
     const [showWhatsappModal, setShowWhatsappModal] = useState(false);
     const [whatsappLead, setWhatsappLead] = useState(null);
+
+    // Agendamento
+    const [scheduleDate, setScheduleDate] = useState('');
+    const [scheduleTime, setScheduleTime] = useState('');
+    const [leadSchedules, setLeadSchedules] = useState([]);
+
+
+    const [scheduleObservation, setScheduleObservation] = useState('');
 
     // Paginação
     const [page, setPage] = useState(1);
@@ -42,13 +51,19 @@ export default function Leads() {
 
     // Atualizar ref quando filtros mudam
     useEffect(() => {
-        filtersRef.current = { search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page };
-    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page]);
+        filtersRef.current = { search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page };
+    }, [search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page]);
 
     const loadLeads = useCallback(async () => {
-        const { search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page } = filtersRef.current;
+        const { search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page } = filtersRef.current;
         const params = { page, limit: LIMIT };
-        if (search) params.search = search;
+        if (search) {
+            if (searchByObservation) {
+                params.search_observation = search;
+            } else {
+                params.search = search;
+            }
+        }
         if (statusFilter) params.status = statusFilter;
         if (campaignFilter) params.campaign_id = campaignFilter;
         if (subcampaignFilter) params.subcampaign_id = subcampaignFilter;
@@ -81,14 +96,14 @@ export default function Leads() {
     useEffect(() => {
         const t = setTimeout(loadLeads, 300);
         return () => clearTimeout(t);
-    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page, loadLeads]);
+    }, [search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page, loadLeads]);
 
     // Reset página quando filtros mudam
     useEffect(() => {
         setPage(1);
         setSelectedUuids(new Set());
         setSelectAll(false);
-    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter]);
+    }, [search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter]);
 
     // Auto-refresh removido
 
@@ -161,6 +176,36 @@ export default function Leads() {
         setShowWhatsappModal(false);
     };
 
+    // Funções de Agendamento
+    const openScheduleModal = (lead) => {
+        setScheduleLead(lead);
+        setScheduleDate('');
+        setScheduleTime('');
+        setScheduleObservation('');
+        setShowScheduleModal(true);
+    };
+
+    const createSchedule = async () => {
+        if (!scheduleLead || !scheduleDate || !scheduleTime) return;
+        const scheduledAt = `${scheduleDate}T${scheduleTime}:00`;
+        try {
+            await api.createSchedule({
+                lead_id: scheduleLead.id,
+                scheduled_at: scheduledAt,
+                observation: scheduleObservation || null
+            });
+            setShowScheduleModal(false);
+            loadLeads();
+        } catch (e) {
+            console.error('Erro ao criar agendamento:', e);
+        }
+    };
+
+    // Verificar se lead tem observação (ícone verde)
+    const hasNote = (lead) => {
+        return lead.observations && lead.observations.length > 0;
+    };
+
     // Seleção individual
     const toggleSelect = (uuid) => {
         const newSet = new Set(selectedUuids);
@@ -219,19 +264,41 @@ export default function Leads() {
             {/* Filtros */}
             <div className="card" style={{ marginBottom: 16 }}>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
-                        <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                        <input
-                            className="form-input"
+                    <div style={{ flex: 1, minWidth: 200, position: 'relative', display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                            <input
+                                className="form-input"
+                                style={{
+                                    paddingLeft: 40,
+                                    opacity: isAdmin ? 1 : 0.7,
+                                    background: isAdmin ? undefined : 'rgba(255,255,255,0.05)',
+                                    borderColor: searchByObservation ? '#f59e0b' : undefined
+                                }}
+                                placeholder={searchByObservation ? "Buscar nas observações..." : "Buscar por nome, email ou telefone..."}
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            onClick={() => setSearchByObservation(!searchByObservation)}
+                            title={searchByObservation ? "Pesquisar por nome/email/telefone" : "Pesquisar nas observações"}
                             style={{
-                                paddingLeft: 40,
-                                opacity: isAdmin ? 1 : 0.7,
-                                background: isAdmin ? undefined : 'rgba(255,255,255,0.05)'
+                                padding: '8px 12px',
+                                borderRadius: 8,
+                                border: searchByObservation ? '2px solid #f59e0b' : '1px solid var(--border)',
+                                background: searchByObservation ? 'rgba(245, 158, 11, 0.2)' : 'var(--bg-secondary)',
+                                color: searchByObservation ? '#f59e0b' : 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontWeight: searchByObservation ? 600 : 400
                             }}
-                            placeholder="Buscar por nome, email ou telefone..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                        />
+                        >
+                            <FileText size={16} />
+                            OBS
+                        </button>
                     </div>
                     <select className="form-select" style={{ width: 130 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">Status</option>
@@ -440,7 +507,24 @@ export default function Leads() {
                                             )}
                                             <td style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{formatDate(lead.created_at)}</td>
                                             <td>
-                                                <button className="btn btn-ghost btn-sm" style={{ padding: 4 }} onClick={() => { setSelectedLead(lead); setObservation(''); }}>
+                                                <button
+                                                    className="btn btn-ghost btn-sm"
+                                                    style={{ padding: 4, color: hasNote(lead) ? '#10b981' : undefined }}
+                                                    onClick={async () => {
+                                                        setSelectedLead(lead);
+                                                        setObservation('');
+                                                        setScheduleDate('');
+                                                        setScheduleTime('');
+                                                        // Carregar agendamentos do lead
+                                                        try {
+                                                            const data = await api.getLeadSchedules(lead.id);
+                                                            setLeadSchedules(data.schedules || []);
+                                                        } catch (e) {
+                                                            setLeadSchedules([]);
+                                                        }
+                                                    }}
+                                                    title={hasNote(lead) ? "Tem observações" : "Observações e Agendamento"}
+                                                >
                                                     <MessageSquare size={14} />
                                                 </button>
                                             </td>
@@ -517,7 +601,7 @@ export default function Leads() {
             {/* Modal do Lead */}
             {selectedLead && (
                 <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
-                    <div className="modal slide-up" onClick={e => e.stopPropagation()}>
+                    <div className="modal slide-up" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
                         <div className="modal-header">
                             <h3>{selectedLead.first_name}</h3>
                             <button className="btn btn-ghost btn-sm" onClick={() => setSelectedLead(null)}><X size={18} /></button>
@@ -534,9 +618,112 @@ export default function Leads() {
                             {selectedLead.campaign_name && <p><strong>Campanha:</strong> {selectedLead.campaign_name}</p>}
                             {selectedLead.phone && <a href={`https://wa.me/${formatPhone(selectedLead.phone)}`} target="_blank" rel="noopener" className="whatsapp-btn" style={{ marginTop: 12 }}><Phone size={14} /> Abrir WhatsApp</a>}
                         </div>
+
+                        {/* Seção de Agendamento */}
+                        <div className="form-group" style={{
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            padding: 16,
+                            borderRadius: 8,
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                            marginBottom: 16
+                        }}>
+                            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Calendar size={16} color="#6366f1" /> Agendar Contato
+                            </label>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                                <input
+                                    type="date"
+                                    className="form-input"
+                                    style={{
+                                        flex: '1 1 130px',
+                                        minWidth: 130,
+                                        colorScheme: 'dark'
+                                    }}
+                                    value={scheduleDate}
+                                    onChange={e => setScheduleDate(e.target.value)}
+                                    min={new Date().toISOString().split('T')[0]}
+                                />
+                                <input
+                                    type="time"
+                                    className="form-input"
+                                    style={{
+                                        flex: '0 0 110px',
+                                        minWidth: 110,
+                                        colorScheme: 'dark'
+                                    }}
+                                    value={scheduleTime}
+                                    onChange={e => setScheduleTime(e.target.value)}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={async () => {
+                                        if (!scheduleDate || !scheduleTime) {
+                                            alert('Selecione data e hora');
+                                            return;
+                                        }
+                                        try {
+                                            const scheduledAt = `${scheduleDate}T${scheduleTime}:00`;
+                                            await api.createSchedule({
+                                                lead_id: selectedLead.id,
+                                                scheduled_at: scheduledAt,
+                                                observation: observation || null
+                                            });
+                                            alert('Agendamento criado!');
+                                            setScheduleDate('');
+                                            setScheduleTime('');
+                                            // Recarregar agendamentos do lead
+                                            const data = await api.getLeadSchedules(selectedLead.id);
+                                            setLeadSchedules(data.schedules || []);
+                                            loadLeads();
+                                        } catch (err) {
+                                            console.error('Erro ao agendar:', err);
+                                            alert('Erro ao criar agendamento: ' + (err.message || 'Tente novamente'));
+                                        }
+                                    }}
+                                    disabled={!scheduleDate || !scheduleTime}
+                                    style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+                                >
+                                    <Calendar size={16} /> Agendar
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Agendamentos do Lead */}
+                        {leadSchedules.length > 0 && (
+                            <div className="form-group">
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Calendar size={14} color="#6366f1" /> Agendamentos ({leadSchedules.length})
+                                </label>
+                                <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: 12, borderRadius: 8, maxHeight: 120, overflow: 'auto' }}>
+                                    {leadSchedules.map((sch, i) => (
+                                        <div key={sch.uuid || i} style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            padding: '6px 0',
+                                            borderBottom: i < leadSchedules.length - 1 ? '1px solid var(--border)' : 'none'
+                                        }}>
+                                            <span style={{
+                                                fontSize: '0.8rem',
+                                                color: new Date(sch.scheduled_at) < new Date() ? '#ef4444' : '#6366f1',
+                                                fontWeight: 600
+                                            }}>
+                                                📅 {new Date(sch.scheduled_at).toLocaleDateString('pt-BR')} às {new Date(sch.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            {sch.observation && (
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                    {sch.observation}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="form-group">
                             <label className="form-label">Histórico de Observações</label>
-                            <div style={{ background: 'var(--bg-primary)', padding: 16, borderRadius: 8, maxHeight: 200, overflow: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            <div style={{ background: 'var(--bg-primary)', padding: 12, borderRadius: 8, maxHeight: 120, overflow: 'auto', whiteSpace: 'pre-wrap', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                                 {selectedLead.observations || 'Nenhuma observação ainda'}
                             </div>
                         </div>

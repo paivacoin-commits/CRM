@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { TrendingUp, Users, CheckCircle, Clock, MessageSquare, CheckSquare, DollarSign, UserCheck, UserX, Filter } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle, Clock, MessageSquare, CheckSquare, DollarSign, UserCheck, UserX, Filter, Calendar, Phone } from 'lucide-react';
 
 export default function Dashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [campaigns, setCampaigns] = useState([]);
     const [subcampaigns, setSubcampaigns] = useState([]);
+    const [schedules, setSchedules] = useState([]);
     const [campaignFilter, setCampaignFilter] = useState('');
     const [subcampaignFilter, setSubcampaignFilter] = useState('');
     const { isAdmin } = useAuth();
@@ -20,8 +21,13 @@ export default function Dashboard() {
         api.getDashboard(params).then(setData).finally(() => setLoading(false));
     };
 
+    const loadSchedules = () => {
+        api.getSchedules({ upcoming_only: true }).then(d => setSchedules(d.schedules || [])).catch(() => { });
+    };
+
     useEffect(() => {
         loadDashboard();
+        loadSchedules();
         if (isAdmin) {
             api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns || []));
             api.getSubcampaigns({}).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
@@ -233,6 +239,84 @@ export default function Dashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Seção de Agendamentos */}
+            {schedules.length > 0 && (
+                <div className="card" style={{ marginTop: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        <Calendar size={20} color="#6366f1" />
+                        <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Próximos Agendamentos</h2>
+                        <span style={{
+                            background: '#6366f1',
+                            color: '#fff',
+                            padding: '2px 8px',
+                            borderRadius: 12,
+                            fontSize: '0.75rem',
+                            fontWeight: 600
+                        }}>
+                            {schedules.length}
+                        </span>
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', display: 'grid', gap: 10 }}>
+                        {schedules.map(schedule => (
+                            <div
+                                key={schedule.uuid}
+                                style={{
+                                    background: 'var(--bg-primary)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 10,
+                                    padding: '12px 16px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                                        {schedule.leads?.first_name || 'Lead'}
+                                    </div>
+                                    {schedule.observation && (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                            {schedule.observation}
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        color: new Date(schedule.scheduled_at) < new Date() ? '#ef4444' : '#6366f1'
+                                    }}>
+                                        {new Date(schedule.scheduled_at).toLocaleDateString('pt-BR')}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                        {new Date(schedule.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                </div>
+                                {schedule.leads?.phone && (
+                                    <button
+                                        onClick={() => window.open(`https://wa.me/${schedule.leads.phone.replace(/\D/g, '')}`, '_blank')}
+                                        style={{
+                                            background: '#25D366',
+                                            border: 'none',
+                                            borderRadius: 8,
+                                            padding: '8px 12px',
+                                            color: '#000',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        <Phone size={14} /> Ligar
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
