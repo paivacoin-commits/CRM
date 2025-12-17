@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
+import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle, Copy } from 'lucide-react';
 
 export default function Leads() {
     const { isAdmin, user } = useAuth();
@@ -126,6 +126,11 @@ export default function Leads() {
 
     // WhatsApp functions
     const openWhatsappModal = (lead) => {
+        // Copiar número para área de transferência
+        if (lead?.phone) {
+            const phone = lead.phone.replace(/\D/g, '');
+            navigator.clipboard.writeText(phone);
+        }
         setWhatsappLead(lead);
         setShowWhatsappModal(true);
     };
@@ -139,6 +144,14 @@ export default function Leads() {
         const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
         setShowWhatsappModal(false);
+    };
+
+    const copyMessage = (template) => {
+        let message = template.message
+            .replace(/{nome}/gi, whatsappLead?.first_name || '')
+            .replace(/{produto}/gi, whatsappLead?.product_name || '');
+        navigator.clipboard.writeText(message);
+        // Feedback visual rápido (poderia adicionar um toast, mas vamos manter simples)
     };
 
     const sendWhatsappDirect = () => {
@@ -589,39 +602,63 @@ export default function Leads() {
                                     </p>
                                     <div style={{ display: 'grid', gap: 10, marginBottom: 20, maxHeight: 250, overflowY: 'auto' }}>
                                         {whatsappTemplates.map(t => (
-                                            <button
+                                            <div
                                                 key={t.uuid}
-                                                onClick={() => sendWhatsappMessage(t)}
                                                 style={{
                                                     background: 'var(--bg-primary)',
                                                     border: '1px solid var(--border)',
                                                     borderRadius: 10,
                                                     padding: '14px 16px',
-                                                    textAlign: 'left',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    width: '100%'
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 10
                                                 }}
-                                                onMouseOver={e => { e.currentTarget.style.borderColor = '#25D366'; e.currentTarget.style.background = 'rgba(37, 211, 102, 0.08)'; }}
-                                                onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-primary)'; }}
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                                                    <MessageCircle size={16} color="#25D366" />
-                                                    <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{t.name}</strong>
-                                                </div>
-                                                <p style={{
-                                                    fontSize: '0.8rem',
-                                                    color: 'var(--text-secondary)',
-                                                    margin: 0,
-                                                    lineHeight: 1.4,
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 2,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden'
-                                                }}>
-                                                    {t.message.substring(0, 80)}...
-                                                </p>
-                                            </button>
+                                                <button
+                                                    onClick={() => sendWhatsappMessage(t)}
+                                                    style={{
+                                                        flex: 1,
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        textAlign: 'left',
+                                                        cursor: 'pointer',
+                                                        padding: 0
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                                        <MessageCircle size={16} color="#25D366" />
+                                                        <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{t.name}</strong>
+                                                    </div>
+                                                    <p style={{
+                                                        fontSize: '0.8rem',
+                                                        color: 'var(--text-secondary)',
+                                                        margin: 0,
+                                                        lineHeight: 1.4,
+                                                        display: '-webkit-box',
+                                                        WebkitLineClamp: 2,
+                                                        WebkitBoxOrient: 'vertical',
+                                                        overflow: 'hidden'
+                                                    }}>
+                                                        {t.message.substring(0, 80)}...
+                                                    </p>
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); copyMessage(t); }}
+                                                    title="Copiar mensagem"
+                                                    style={{
+                                                        background: 'var(--bg-secondary)',
+                                                        border: '1px solid var(--border)',
+                                                        borderRadius: 6,
+                                                        padding: '8px',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                    <Copy size={14} color="var(--text-secondary)" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
                                 </>
