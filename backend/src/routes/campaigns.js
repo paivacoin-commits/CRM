@@ -10,10 +10,9 @@ import { authenticate, authorize } from '../middleware/auth.js';
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize('admin'));
 
 /**
- * GET /api/campaigns
+ * GET /api/campaigns - Disponível para todos usuários autenticados
  */
 router.get('/', async (req, res) => {
     try {
@@ -27,9 +26,9 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * POST /api/campaigns
+ * POST /api/campaigns - Apenas admin
  */
-router.post('/', async (req, res) => {
+router.post('/', authorize('admin'), async (req, res) => {
     try {
         const { name, description } = req.body;
 
@@ -52,9 +51,9 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * PATCH /api/campaigns/:uuid
+ * PATCH /api/campaigns/:uuid - Apenas admin
  */
-router.patch('/:uuid', async (req, res) => {
+router.patch('/:uuid', authorize('admin'), async (req, res) => {
     try {
         const { uuid } = req.params;
         const { name, description, is_active } = req.body;
@@ -73,9 +72,9 @@ router.patch('/:uuid', async (req, res) => {
 });
 
 /**
- * POST /api/campaigns/:uuid/activate
+ * POST /api/campaigns/:uuid/activate - Apenas admin
  */
-router.post('/:uuid/activate', async (req, res) => {
+router.post('/:uuid/activate', authorize('admin'), async (req, res) => {
     try {
         const { uuid } = req.params;
 
@@ -93,9 +92,9 @@ router.post('/:uuid/activate', async (req, res) => {
 });
 
 /**
- * DELETE /api/campaigns/:uuid
+ * DELETE /api/campaigns/:uuid - Apenas admin
  */
-router.delete('/:uuid', async (req, res) => {
+router.delete('/:uuid', authorize('admin'), async (req, res) => {
     try {
         await db.deleteCampaign(req.params.uuid);
         res.json({ message: 'Campanha deletada' });

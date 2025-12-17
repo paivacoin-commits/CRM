@@ -327,7 +327,7 @@ export default function Leads() {
                                                     value={lead.status_id}
                                                     onChange={e => updateStatus(lead.uuid, e.target.value ? parseInt(e.target.value) : null)}
                                                 >
-                                                    <option value="" style={{ background: '#1e293b', color: '#fff' }}>- Limpar -</option>
+                                                    <option value="" style={{ background: '#1e293b', color: '#fff' }}>- Selecione -</option>
                                                     {statuses.map(s => <option key={s.id} value={s.id} style={{ background: '#1e293b', color: '#fff' }}>{s.name}</option>)}
                                                 </select>
                                             ) : (
