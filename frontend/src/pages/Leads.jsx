@@ -279,7 +279,9 @@ export default function Leads() {
                             <thead><tr>
                                 {isAdmin && <th style={{ width: 40 }}></th>}
                                 <th>Nome</th>
-                                <th>Contato</th>
+                                <th>Email</th>
+                                <th>Telefone</th>
+                                <th>Vendedora</th>
                                 <th>Status</th>
                                 <th>Checking</th>
                                 <th>Venda</th>
@@ -302,10 +304,8 @@ export default function Leads() {
                                                 </button>
                                             </td>
                                         )}
-                                        <td>
-                                            <strong>{lead.first_name}</strong>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{lead.email}</div>
-                                        </td>
+                                        <td><strong>{lead.first_name}</strong></td>
+                                        <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{lead.email || '-'}</td>
                                         <td>
                                             {lead.phone ? (
                                                 <button
@@ -313,10 +313,11 @@ export default function Leads() {
                                                     className="whatsapp-btn"
                                                     style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none' }}
                                                 >
-                                                    <Phone size={12} /> WhatsApp
+                                                    <Phone size={12} /> {lead.phone.slice(-8).replace(/(\d{4})(\d{4})/, '$1-$2')}
                                                 </button>
                                             ) : '-'}
                                         </td>
+                                        <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
                                         <td>
                                             <select className="form-select" style={{ width: 110, padding: '4px 8px', fontSize: '0.75rem' }} value={lead.status_id || ''} onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}>
                                                 {!lead.status_id && <option value="">- Selecione -</option>}

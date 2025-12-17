@@ -271,11 +271,20 @@ router.post('/import/leads', async (req, res) => {
                 if (existing) {
                     console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}`);
                     if (update_existing) {
+                        // Determinar vendedora para atualização
+                        let updateSellerId = seller_id || null;
+                        if (distribute && sellers.length > 0) {
+                            updateSellerId = sellers[sellerIndex % sellers.length].id;
+                            sellerIndex++;
+                        }
+
                         await db.updateLeadById(existing.id, {
                             first_name: leadNome || existing.first_name || 'Sem nome',
                             phone: leadPhone || existing.phone || '',
                             product_name: leadProduto || existing.product_name || '',
-                            in_group
+                            in_group,
+                            campaign_id: campaign_id || existing.campaign_id, // Atualiza campanha se selecionada
+                            seller_id: updateSellerId || existing.seller_id // Atualiza vendedora se selecionada
                         });
                         updated++;
                     } else {
