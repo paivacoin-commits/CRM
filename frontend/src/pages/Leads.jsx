@@ -65,8 +65,9 @@ export default function Leads() {
     useEffect(() => {
         api.getStatuses().then(d => setStatuses(d.statuses));
         api.getWhatsAppTemplates().then(d => setWhatsappTemplates(d.templates || [])).catch(() => { });
+        // Vendedoras e admin carregam campanhas
+        api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
         if (isAdmin) {
-            api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
             api.getSellers().then(d => setSellers(d.sellers || []));
         }
         loadLeads();
@@ -88,7 +89,7 @@ export default function Leads() {
     // Auto-refresh removido
 
     const updateStatus = async (uuid, status_id) => {
-        await api.updateLeadStatus(uuid, status_id);
+        await api.updateLeadStatus(uuid, status_id || null); // Permite limpar status
         loadLeads();
         if (selectedLead?.uuid === uuid) setSelectedLead({ ...selectedLead, status_id });
     };
@@ -203,14 +204,24 @@ export default function Leads() {
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
                         <Search size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                        <input className="form-input" style={{ paddingLeft: 40 }} placeholder="Buscar por nome, email ou telefone..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <input
+                            className="form-input"
+                            style={{
+                                paddingLeft: 40,
+                                opacity: isAdmin ? 1 : 0.7,
+                                background: isAdmin ? undefined : 'rgba(255,255,255,0.05)'
+                            }}
+                            placeholder="Buscar por nome, email ou telefone..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
                     </div>
                     <select className="form-select" style={{ width: 130 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">Status</option>
                         {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
-                    {isAdmin && campaigns.length > 0 && (
-                        <select className="form-select" style={{ width: 150 }} value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)}>
+                    {campaigns.length > 0 && (
+                        <select className="form-select" style={{ width: 150, opacity: isAdmin ? 1 : 0.7 }} value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)}>
                             <option value="">Campanhas</option>
                             {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
@@ -314,8 +325,9 @@ export default function Leads() {
                                                         fontWeight: 500
                                                     }}
                                                     value={lead.status_id}
-                                                    onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}
+                                                    onChange={e => updateStatus(lead.uuid, e.target.value ? parseInt(e.target.value) : null)}
                                                 >
+                                                    <option value="" style={{ background: '#1e293b', color: '#fff' }}>- Limpar -</option>
                                                     {statuses.map(s => <option key={s.id} value={s.id} style={{ background: '#1e293b', color: '#fff' }}>{s.name}</option>)}
                                                 </select>
                                             ) : (
