@@ -396,10 +396,12 @@ function ExportLeads() {
 function ImportLeads() {
     const [sellers, setSellers] = useState([]);
     const [campaigns, setCampaigns] = useState([]);
+    const [subcampaigns, setSubcampaigns] = useState([]);
     const [fileData, setFileData] = useState('');
     const [fileName, setFileName] = useState('');
     const [selectedSeller, setSelectedSeller] = useState('');
     const [selectedCampaign, setSelectedCampaign] = useState('');
+    const [selectedSubcampaign, setSelectedSubcampaign] = useState('');
     const [distribute, setDistribute] = useState(false);
     const [inGroup, setInGroup] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -415,6 +417,7 @@ function ImportLeads() {
     useEffect(() => {
         api.getSellers().then(d => setSellers(d.sellers));
         api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
+        api.getSubcampaigns({ active_only: true }).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
     }, []);
 
     const handleFileUpload = (e) => {
@@ -501,6 +504,7 @@ function ImportLeads() {
             let data = { leads, distribute, in_group: inGroup, update_existing: true };
             if (selectedSeller && !distribute) data.seller_id = parseInt(selectedSeller);
             if (selectedCampaign) data.campaign_id = parseInt(selectedCampaign);
+            if (selectedSubcampaign) data.subcampaign_id = parseInt(selectedSubcampaign);
 
             const res = await api.importLeads(data);
             setToast({ type: 'success', imported: res.imported, updated: res.updated || 0, skipped: res.skipped, total: res.total });
@@ -548,13 +552,35 @@ function ImportLeads() {
                 />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                 <div className="form-group">
                     <label className="form-label">Campanha / Lançamento</label>
-                    <select className="form-select" value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)}>
+                    <select className="form-select" value={selectedCampaign} onChange={e => { setSelectedCampaign(e.target.value); setSelectedSubcampaign(''); }}>
                         <option value="">Nenhuma campanha</option>
                         {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Subcampanha (marcador)</label>
+                    <select
+                        className="form-select"
+                        value={selectedSubcampaign}
+                        onChange={e => setSelectedSubcampaign(e.target.value)}
+                        disabled={!selectedCampaign}
+                    >
+                        <option value="">Nenhuma subcampanha</option>
+                        {subcampaigns
+                            .filter(sc => sc.campaign_id === parseInt(selectedCampaign))
+                            .map(sc => (
+                                <option key={sc.id} value={sc.id} style={{ color: sc.color }}>● {sc.name}</option>
+                            ))}
+                    </select>
+                    {selectedSubcampaign && (
+                        <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            Leads existentes serão marcados com o ponto colorido
+                        </div>
+                    )}
                 </div>
 
                 <div className="form-group">

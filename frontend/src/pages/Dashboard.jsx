@@ -7,12 +7,16 @@ export default function Dashboard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [campaigns, setCampaigns] = useState([]);
+    const [subcampaigns, setSubcampaigns] = useState([]);
     const [campaignFilter, setCampaignFilter] = useState('');
+    const [subcampaignFilter, setSubcampaignFilter] = useState('');
     const { isAdmin } = useAuth();
 
-    const loadDashboard = (campaign_id) => {
+    const loadDashboard = (campaign_id, subcampaign_id) => {
         setLoading(true);
-        const params = campaign_id ? { campaign_id } : {};
+        const params = {};
+        if (campaign_id) params.campaign_id = campaign_id;
+        if (subcampaign_id) params.subcampaign_id = subcampaign_id;
         api.getDashboard(params).then(setData).finally(() => setLoading(false));
     };
 
@@ -20,12 +24,18 @@ export default function Dashboard() {
         loadDashboard();
         if (isAdmin) {
             api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns || []));
+            api.getSubcampaigns({}).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
         }
     }, [isAdmin]);
 
     useEffect(() => {
-        loadDashboard(campaignFilter);
-    }, [campaignFilter]);
+        loadDashboard(campaignFilter, subcampaignFilter);
+    }, [campaignFilter, subcampaignFilter]);
+
+    // Subcampanhas filtradas pela campanha selecionada
+    const filteredSubcampaigns = subcampaigns.filter(sc =>
+        !campaignFilter || sc.campaign_id === parseInt(campaignFilter)
+    );
 
     if (loading && !data) return <div className="card">Carregando...</div>;
     if (!data) return <div className="card">Erro ao carregar dados</div>;
@@ -41,11 +51,26 @@ export default function Dashboard() {
                             className="form-select"
                             style={{ minWidth: 180 }}
                             value={campaignFilter}
-                            onChange={e => setCampaignFilter(e.target.value)}
+                            onChange={e => { setCampaignFilter(e.target.value); setSubcampaignFilter(''); }}
                         >
                             <option value="">Todas as Campanhas</option>
                             {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
+                        {campaignFilter && filteredSubcampaigns.length > 0 && (
+                            <select
+                                className="form-select"
+                                style={{ minWidth: 150 }}
+                                value={subcampaignFilter}
+                                onChange={e => setSubcampaignFilter(e.target.value)}
+                            >
+                                <option value="">Campanha Original</option>
+                                {filteredSubcampaigns.map(sc => (
+                                    <option key={sc.id} value={sc.id} style={{ color: sc.color }}>
+                                        ● {sc.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                 )}
             </div>

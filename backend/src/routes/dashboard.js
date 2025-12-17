@@ -17,12 +17,20 @@ router.get('/', async (req, res) => {
     try {
         const isAdmin = req.user.role === 'admin';
         const sellerId = isAdmin ? null : req.user.id;
-        const { campaign_id } = req.query;
+        const { campaign_id, subcampaign_id } = req.query;
 
         // Base filters helper
+        // Se tem subcampaign_id: filtra pela subcampanha específica
+        // Se tem campaign_id mas não subcampaign_id: mostra TODOS os leads da campanha (incluindo com subcampanha)
+        // Assim as conversões (sale_completed) aparecem na campanha original
         const applyFilters = (query) => {
             if (sellerId) query = query.eq('seller_id', sellerId);
             if (campaign_id) query = query.eq('campaign_id', parseInt(campaign_id));
+            if (subcampaign_id) {
+                query = query.eq('subcampaign_id', parseInt(subcampaign_id));
+            }
+            // Nota: não excluímos mais leads com subcampanha da campanha original
+            // para que as conversões (sale_completed) continuem contando
             return query;
         };
 
@@ -90,15 +98,44 @@ router.get('/', async (req, res) => {
         const recentLeads = recentResult.data || [];
         const sellers = sellersResult.data || [];
 
-        // Processar status counts
+        // Processar status counts + buscar leads com subcampanha que tinham esse status
+        // APENAS quando não está filtrando por subcampanha específica
         let conversions = 0;
         let pendingLeads = 0;
+
+        let statusExtraCounts = [];
+
+        // Só busca previous_status_id se NÃO está filtrando por subcampanha específica
+        if (!subcampaign_id) {
+            const statusExtraCountsQueries = (statuses || []).map(async (status) => {
+                let q = supabase
+                    .from('leads')
+                    .select('*', { count: 'exact', head: true })
+                    .not('subcampaign_id', 'is', null)
+                    .eq('previous_status_id', status.id);
+
+                if (sellerId) q = q.eq('seller_id', sellerId);
+                if (campaign_id) q = q.eq('campaign_id', parseInt(campaign_id));
+
+                const { count } = await q;
+                return count || 0;
+            });
+
+            statusExtraCounts = await Promise.all(statusExtraCountsQueries);
+        }
+
         const byStatus = (statuses || []).map((status, i) => {
-            const count = statusCounts[i]?.count || 0;
-            if (status.is_conversion) conversions += count;
-            if (status.name === 'Novo' || status.name === 'Em Contato' || status.name === 'novo') pendingLeads += count;
-            return { name: status.name, color: status.color, count };
+            const baseCount = statusCounts[i]?.count || 0;
+            const extraCount = statusExtraCounts[i] || 0;
+            const totalCount = baseCount + extraCount;
+
+            if (status.is_conversion) conversions += totalCount;
+            if (status.name === 'Novo' || status.name === 'Em Contato' || status.name === 'novo') pendingLeads += totalCount;
+            return { name: status.name, color: status.color, count: totalCount };
         });
+
+        // conversionStatusIds usado abaixo
+        const conversionStatusIds = (statuses || []).filter(s => s.is_conversion).map(s => s.id);
 
         // Format recent leads
         const recentLeadsFormatted = recentLeads.map(l => ({
@@ -110,7 +147,7 @@ router.get('/', async (req, res) => {
         }));
 
         // Buscar performance das vendedoras em paralelo
-        const conversionStatusIds = (statuses || []).filter(s => s.is_conversion).map(s => s.id);
+        // conversionStatusIds já foi declarado acima
 
         const sellerPerformance = await Promise.all(sellers.map(async (seller) => {
             const [totalRes, convRes] = await Promise.all([

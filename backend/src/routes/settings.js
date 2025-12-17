@@ -196,12 +196,13 @@ router.post('/import/leads', async (req, res) => {
             seller_id,
             distribute = false,
             campaign_id = null,
+            subcampaign_id = null,
             in_group = true,
             update_existing = true,
             batch_name = null
         } = req.body;
 
-        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id });
+        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id, subcampaign_id });
 
         let leadsToImport = [];
 
@@ -278,14 +279,33 @@ router.post('/import/leads', async (req, res) => {
                             sellerIndex++;
                         }
 
-                        await db.updateLeadById(existing.id, {
+                        // Se está adicionando subcampanha, salvar status e checking antigos e limpar
+                        const updateData = {
                             first_name: leadNome || existing.first_name || 'Sem nome',
                             phone: leadPhone || existing.phone || '',
                             product_name: leadProduto || existing.product_name || '',
                             in_group,
-                            campaign_id: campaign_id || existing.campaign_id, // Atualiza campanha se selecionada
-                            seller_id: updateSellerId || existing.seller_id // Atualiza vendedora se selecionada
-                        });
+                            campaign_id: campaign_id || existing.campaign_id,
+                            subcampaign_id: subcampaign_id || existing.subcampaign_id,
+                            seller_id: updateSellerId || existing.seller_id
+                        };
+
+                        // Se selecionou subcampanha, salvar valores antigos (se existem) e limpar
+                        if (subcampaign_id) {
+                            // Só salva previous se tem valor atual e não tinha previous ainda
+                            if (existing.status_id && !existing.previous_status_id) {
+                                updateData.previous_status_id = existing.status_id;
+                            }
+                            if (existing.checking && !existing.previous_checking) {
+                                updateData.previous_checking = existing.checking;
+                            }
+                            // Sempre limpa status e checking
+                            updateData.status_id = null;
+                            updateData.checking = false;
+                            console.log(`   ↳ Salvando previous: status=${existing.status_id}, checking=${existing.checking}`);
+                        }
+
+                        await db.updateLeadById(existing.id, updateData);
                         updated++;
                     } else {
                         skipped++;
@@ -309,9 +329,10 @@ router.post('/import/leads', async (req, res) => {
                     phone: leadPhone,
                     product_name: leadProduto,
                     seller_id: assignedSellerId,
-                    status_id: null, // Sem status inicial - será selecionado manualmente
+                    status_id: null,
                     source: 'import',
                     campaign_id,
+                    subcampaign_id,
                     in_group,
                     import_batch_id: batch.id
                 });

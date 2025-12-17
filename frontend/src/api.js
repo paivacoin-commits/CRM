@@ -67,4 +67,9 @@ export const api = {
     createWhatsAppTemplate: (data) => request('/whatsapp-templates', { method: 'POST', body: JSON.stringify(data) }),
     updateWhatsAppTemplate: (uuid, data) => request(`/whatsapp-templates/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteWhatsAppTemplate: (uuid) => request(`/whatsapp-templates/${uuid}`, { method: 'DELETE' }),
+    // Subcampaigns
+    getSubcampaigns: (params = {}) => request(`/subcampaigns?${new URLSearchParams(params)}`),
+    createSubcampaign: (data) => request('/subcampaigns', { method: 'POST', body: JSON.stringify(data) }),
+    updateSubcampaign: (uuid, data) => request(`/subcampaigns/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteSubcampaign: (uuid) => request(`/subcampaigns/${uuid}`, { method: 'DELETE' }),
 };

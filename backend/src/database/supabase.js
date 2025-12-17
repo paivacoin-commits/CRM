@@ -143,14 +143,15 @@ export const db = {
     },
 
     // ==================== LEADS ====================
-    async getLeads({ status, search, campaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
+    async getLeads({ status, search, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
         let query = supabase
             .from('leads')
             .select(`
                 *,
-                lead_statuses(id, name, color),
-                users(id, name),
-                campaigns(id, name)
+                lead_statuses!status_id(id, name, color),
+                users!seller_id(id, name),
+                campaigns!campaign_id(id, name),
+                subcampaigns!subcampaign_id(id, name, color)
             `, { count: 'exact' });
 
         if (!show_inactive) {
@@ -159,6 +160,7 @@ export const db = {
         if (seller_id) query = query.eq('seller_id', seller_id);
         if (status) query = query.eq('status_id', status);
         if (campaign_id) query = query.eq('campaign_id', campaign_id);
+        if (subcampaign_id) query = query.eq('subcampaign_id', subcampaign_id);
         if (in_group !== undefined) query = query.eq('in_group', in_group === 'true');
         if (search) {
             query = query.or(`first_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
@@ -173,12 +175,15 @@ export const db = {
         // Mapear dados para formato esperado
         const leads = (data || []).map(l => ({
             ...l,
-            status_id: l.lead_statuses?.id,
+            status_id: l.lead_statuses?.id || l.status_id,
             status_name: l.lead_statuses?.name,
             status_color: l.lead_statuses?.color,
-            seller_id: l.users?.id,
+            seller_id: l.seller_id,
             seller_name: l.users?.name,
-            campaign_name: l.campaigns?.name
+            campaign_name: l.campaigns?.name,
+            subcampaign_id: l.subcampaign_id,
+            subcampaign_name: l.subcampaigns?.name,
+            subcampaign_color: l.subcampaigns?.color
         }));
 
         return { leads, total: count || 0 };
@@ -189,9 +194,10 @@ export const db = {
             .from('leads')
             .select(`
                 *,
-                lead_statuses(id, name, color),
-                users(id, name),
-                campaigns(id, name)
+                lead_statuses!status_id(id, name, color),
+                users!seller_id(id, name),
+                campaigns!campaign_id(id, name),
+                subcampaigns!subcampaign_id(id, name, color)
             `)
             .eq('uuid', uuid)
             .single();
@@ -199,10 +205,12 @@ export const db = {
         if (!data) return null;
         return {
             ...data,
-            status_id: data.lead_statuses?.id,
+            status_id: data.lead_statuses?.id || data.status_id,
             status_name: data.lead_statuses?.name,
             status_color: data.lead_statuses?.color,
-            seller_name: data.users?.name
+            seller_name: data.users?.name,
+            subcampaign_name: data.subcampaigns?.name,
+            subcampaign_color: data.subcampaigns?.color
         };
     },
 
@@ -211,7 +219,7 @@ export const db = {
         try {
             const { data, error } = await supabase
                 .from('leads')
-                .select('id, email')
+                .select('id, email, phone, first_name, product_name, status_id, checking, subcampaign_id, previous_status_id, previous_checking, campaign_id, seller_id')
                 .ilike('email', email)
                 .limit(1)
                 .maybeSingle();
@@ -231,7 +239,7 @@ export const db = {
         try {
             const { data, error } = await supabase
                 .from('leads')
-                .select('id, phone')
+                .select('id, email, phone, first_name, product_name, status_id, checking, subcampaign_id, previous_status_id, previous_checking, campaign_id, seller_id')
                 .ilike('phone', `%${phoneEnd}`)
                 .limit(1);
             if (error) {
@@ -414,7 +422,28 @@ export const db = {
         if (active_only) query = query.eq('is_active', true);
         const { data, error } = await query;
         if (error) throw error;
-        return data || [];
+
+        // Para cada campanha, buscar contagem de leads
+        const campaignsWithCounts = await Promise.all((data || []).map(async (campaign) => {
+            const { count: totalLeads } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaign.id);
+
+            const { count: notInGroup } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaign.id)
+                .or('in_group.eq.false,in_group.is.null');
+
+            return {
+                ...campaign,
+                total_leads: totalLeads || 0,
+                not_in_group: notInGroup || 0
+            };
+        }));
+
+        return campaignsWithCounts;
     },
 
     async getCampaignByUuid(uuid) {
@@ -614,6 +643,118 @@ export const db = {
                 status_color: l.lead_statuses?.color
             }))
         };
+    },
+
+    // ==================== SUBCAMPAIGNS ====================
+    async getSubcampaigns({ campaign_id, active_only }) {
+        let query = supabase
+            .from('subcampaigns')
+            .select('*, campaigns(id, name)')
+            .order('created_at', { ascending: false });
+
+        if (campaign_id) query = query.eq('campaign_id', campaign_id);
+        if (active_only) query = query.eq('is_active', true);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Para cada subcampanha, buscar contagem de leads
+        const subcampaignsWithCounts = await Promise.all((data || []).map(async (subcampaign) => {
+            const { count: totalLeads } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('subcampaign_id', subcampaign.id);
+
+            return {
+                ...subcampaign,
+                total_leads: totalLeads || 0
+            };
+        }));
+
+        return subcampaignsWithCounts;
+    },
+
+    async getSubcampaignByUuid(uuid) {
+        const { data, error } = await supabase
+            .from('subcampaigns')
+            .select('*, campaigns(id, name)')
+            .eq('uuid', uuid)
+            .single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
+    async getSubcampaignById(id) {
+        const { data, error } = await supabase
+            .from('subcampaigns')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
+    async createSubcampaign(subcampaignData) {
+        const { data, error } = await supabase
+            .from('subcampaigns')
+            .insert(subcampaignData)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateSubcampaign(uuid, updateData) {
+        const { data, error } = await supabase
+            .from('subcampaigns')
+            .update({ ...updateData, updated_at: new Date().toISOString() })
+            .eq('uuid', uuid)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteSubcampaign(uuid) {
+        const { error } = await supabase
+            .from('subcampaigns')
+            .delete()
+            .eq('uuid', uuid);
+        if (error) throw error;
+    },
+
+    // Restaurar status e checking dos leads ao excluir subcampanha
+    async restoreLeadsFromSubcampaign(subcampaignId) {
+        console.log(`🔄 Restaurando leads da subcampanha ${subcampaignId}`);
+        // Buscar todos os leads com esta subcampanha
+        const { data: leads, error: fetchError } = await supabase
+            .from('leads')
+            .select('id, previous_status_id, previous_checking')
+            .eq('subcampaign_id', subcampaignId);
+
+        if (fetchError) throw fetchError;
+        if (!leads || leads.length === 0) {
+            console.log('   ↳ Nenhum lead para restaurar');
+            return;
+        }
+
+        console.log(`   ↳ Restaurando ${leads.length} leads`);
+
+        // Para cada lead, restaurar os valores antigos
+        for (const lead of leads) {
+            console.log(`   ↳ Lead ${lead.id}: prev_status=${lead.previous_status_id}, prev_checking=${lead.previous_checking}`);
+            await supabase
+                .from('leads')
+                .update({
+                    status_id: lead.previous_status_id,
+                    checking: lead.previous_checking ?? false,
+                    subcampaign_id: null,
+                    previous_status_id: null,
+                    previous_checking: null
+                })
+                .eq('id', lead.id);
+        }
+        console.log('   ↳ Restauração concluída');
     }
 };
 

@@ -4,14 +4,16 @@ import { useAuth } from '../AuthContext';
 import { MessageSquare, Phone, Search, X, Send, UserX, UserCheck, Trash2, CheckSquare, Square, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 
 export default function Leads() {
-    const { isAdmin } = useAuth();
+    const { isAdmin, user } = useAuth();
     const [leads, setLeads] = useState([]);
     const [statuses, setStatuses] = useState([]);
     const [campaigns, setCampaigns] = useState([]);
+    const [subcampaigns, setSubcampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [campaignFilter, setCampaignFilter] = useState('');
+    const [subcampaignFilter, setSubcampaignFilter] = useState('');
     const [inGroupFilter, setInGroupFilter] = useState('');
     const [selectedLead, setSelectedLead] = useState(null);
     const [observation, setObservation] = useState('');
@@ -36,19 +38,20 @@ export default function Leads() {
     // Auto-refresh desativado
 
     // Refs para manter valores atualizados no interval
-    const filtersRef = useRef({ search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page });
+    const filtersRef = useRef({ search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page });
 
     // Atualizar ref quando filtros mudam
     useEffect(() => {
-        filtersRef.current = { search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page };
-    }, [search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page]);
+        filtersRef.current = { search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page };
+    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page]);
 
     const loadLeads = useCallback(async () => {
-        const { search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page } = filtersRef.current;
+        const { search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page } = filtersRef.current;
         const params = { page, limit: LIMIT };
         if (search) params.search = search;
         if (statusFilter) params.status = statusFilter;
         if (campaignFilter) params.campaign_id = campaignFilter;
+        if (subcampaignFilter) params.subcampaign_id = subcampaignFilter;
         if (inGroupFilter) params.in_group = inGroupFilter;
         if (sellerFilter) params.seller_id = sellerFilter;
         try {
@@ -65,8 +68,9 @@ export default function Leads() {
     useEffect(() => {
         api.getStatuses().then(d => setStatuses(d.statuses));
         api.getWhatsAppTemplates().then(d => setWhatsappTemplates(d.templates || [])).catch(() => { });
-        // Vendedoras e admin carregam campanhas
+        // Vendedoras e admin carregam campanhas e subcampanhas
         api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
+        api.getSubcampaigns({ active_only: true }).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
         if (isAdmin) {
             api.getSellers().then(d => setSellers(d.sellers || []));
         }
@@ -77,14 +81,14 @@ export default function Leads() {
     useEffect(() => {
         const t = setTimeout(loadLeads, 300);
         return () => clearTimeout(t);
-    }, [search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page, loadLeads]);
+    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page, loadLeads]);
 
     // Reset página quando filtros mudam
     useEffect(() => {
         setPage(1);
         setSelectedUuids(new Set());
         setSelectAll(false);
-    }, [search, statusFilter, campaignFilter, inGroupFilter, sellerFilter]);
+    }, [search, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter]);
 
     // Auto-refresh removido
 
@@ -221,9 +225,21 @@ export default function Leads() {
                         {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     {campaigns.length > 0 && (
-                        <select className="form-select" style={{ width: 150, opacity: isAdmin ? 1 : 0.7 }} value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)}>
+                        <select className="form-select" style={{ width: 150, opacity: isAdmin ? 1 : 0.7 }} value={campaignFilter} onChange={e => { setCampaignFilter(e.target.value); setSubcampaignFilter(''); }}>
                             <option value="">Campanhas</option>
                             {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    )}
+                    {subcampaigns.length > 0 && (
+                        <select className="form-select" style={{ width: 150, opacity: isAdmin ? 1 : 0.7 }} value={subcampaignFilter} onChange={e => setSubcampaignFilter(e.target.value)}>
+                            <option value="">Subcampanhas</option>
+                            {subcampaigns
+                                .filter(sc => !campaignFilter || sc.campaign_id === parseInt(campaignFilter))
+                                .map(sc => (
+                                    <option key={sc.id} value={sc.id} style={{ color: sc.color }}>
+                                        ● {sc.name}
+                                    </option>
+                                ))}
                         </select>
                     )}
                     {isAdmin && sellers.length > 0 && (
@@ -284,111 +300,140 @@ export default function Leads() {
                                 <th>Ações</th>
                             </tr></thead>
                             <tbody>
-                                {leads.map(lead => (
-                                    <tr key={lead.uuid} style={{ background: selectedUuids.has(lead.uuid) ? 'rgba(99, 102, 241, 0.1)' : undefined }}>
-                                        {isAdmin && (
+                                {leads.map((lead, idx) => {
+                                    // Vendedora só pode editar seus próprios leads
+                                    const isOwner = isAdmin || lead.seller_id === user?.id;
+                                    const rowOpacity = isOwner ? 1 : 0.6;
+
+                                    return (
+                                        <tr key={lead.uuid} style={{ background: selectedUuids.has(lead.uuid) ? 'rgba(99, 102, 241, 0.1)' : undefined, opacity: rowOpacity }}>
+                                            {isAdmin && (
+                                                <td>
+                                                    <button
+                                                        className="btn btn-ghost btn-sm"
+                                                        onClick={() => toggleSelect(lead.uuid)}
+                                                        style={{ padding: 4 }}
+                                                    >
+                                                        {selectedUuids.has(lead.uuid) ? <CheckSquare size={16} color="var(--accent)" /> : <Square size={16} />}
+                                                    </button>
+                                                </td>
+                                            )}
                                             <td>
+                                                {lead.subcampaign_color && (
+                                                    <span
+                                                        style={{
+                                                            display: 'inline-block',
+                                                            width: 8,
+                                                            height: 8,
+                                                            borderRadius: '50%',
+                                                            background: lead.subcampaign_color,
+                                                            marginRight: 6,
+                                                            verticalAlign: 'middle'
+                                                        }}
+                                                        title={lead.subcampaign_name || 'Subcampanha'}
+                                                    />
+                                                )}
+                                                <strong>{lead.first_name || lead.email || 'Sem nome'}</strong>
+                                            </td>
+                                            <td>
+                                                {lead.phone ? (
+                                                    <button
+                                                        onClick={() => openWhatsappModal(lead)}
+                                                        className="whatsapp-btn"
+                                                        style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none', background: '#25D366', color: '#000', fontWeight: 500 }}
+                                                    >
+                                                        <Phone size={12} /> {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
+                                                    </button>
+                                                ) : '-'}
+                                            </td>
+                                            <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
+                                            <td>
+                                                {lead.status_id ? (
+                                                    <select
+                                                        className="form-select"
+                                                        style={{
+                                                            width: 'auto',
+                                                            padding: '4px 8px',
+                                                            fontSize: '0.75rem',
+                                                            background: lead.status_color || '#6b7280',
+                                                            color: '#fff',
+                                                            border: 'none',
+                                                            borderRadius: 4,
+                                                            fontWeight: 500,
+                                                            cursor: isOwner ? 'pointer' : 'not-allowed'
+                                                        }}
+                                                        value={lead.status_id}
+                                                        onChange={e => isOwner && updateStatus(lead.uuid, e.target.value ? parseInt(e.target.value) : null)}
+                                                        disabled={!isOwner}
+                                                    >
+                                                        <option value="" style={{ background: '#1e293b', color: '#fff' }}>- Selecione -</option>
+                                                        {statuses.map(s => <option key={s.id} value={s.id} style={{ background: '#1e293b', color: '#fff' }}>{s.name}</option>)}
+                                                    </select>
+                                                ) : (
+                                                    <select
+                                                        className="form-select"
+                                                        style={{ width: 'auto', padding: '4px 8px', fontSize: '0.75rem', cursor: isOwner ? 'pointer' : 'not-allowed' }}
+                                                        value=""
+                                                        onChange={e => isOwner && updateStatus(lead.uuid, parseInt(e.target.value))}
+                                                        disabled={!isOwner}
+                                                    >
+                                                        <option value="">- Selecione -</option>
+                                                        {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                    </select>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
                                                 <button
                                                     className="btn btn-ghost btn-sm"
-                                                    onClick={() => toggleSelect(lead.uuid)}
-                                                    style={{ padding: 4 }}
+                                                    onClick={() => isOwner && toggleChecking(lead.uuid, lead.checking)}
+                                                    style={{ padding: 4, cursor: isOwner ? 'pointer' : 'not-allowed' }}
+                                                    disabled={!isOwner}
                                                 >
-                                                    {selectedUuids.has(lead.uuid) ? <CheckSquare size={16} color="var(--accent)" /> : <Square size={16} />}
+                                                    {lead.checking ? <CheckSquare size={18} color="#10b981" /> : <Square size={18} color="#6b7280" />}
                                                 </button>
                                             </td>
-                                        )}
-                                        <td><strong>{lead.first_name || lead.email || 'Sem nome'}</strong></td>
-                                        <td>
-                                            {lead.phone ? (
+                                            <td style={{ textAlign: 'center' }}>
                                                 <button
-                                                    onClick={() => openWhatsappModal(lead)}
-                                                    className="whatsapp-btn"
-                                                    style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none', background: '#25D366', color: '#000', fontWeight: 500 }}
+                                                    className="btn btn-ghost btn-sm"
+                                                    onClick={() => isOwner && toggleSaleCompleted(lead.uuid, lead.sale_completed)}
+                                                    style={{ padding: 4, cursor: isOwner ? 'pointer' : 'not-allowed' }}
+                                                    disabled={!isOwner}
                                                 >
-                                                    <Phone size={12} /> {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
+                                                    {lead.sale_completed ? <CheckSquare size={18} color="#6366f1" /> : <Square size={18} color="#6b7280" />}
                                                 </button>
-                                            ) : '-'}
-                                        </td>
-                                        <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
-                                        <td>
-                                            {lead.status_id ? (
-                                                <select
-                                                    className="form-select"
+                                            </td>
+                                            <td>
+                                                <button
+                                                    className="btn btn-sm"
                                                     style={{
-                                                        width: 'auto',
+                                                        background: lead.in_group ? '#10b98122' : '#f59e0b22',
+                                                        color: lead.in_group ? '#10b981' : '#f59e0b',
+                                                        border: 'none',
                                                         padding: '4px 8px',
                                                         fontSize: '0.75rem',
-                                                        background: lead.status_color || '#6b7280',
-                                                        color: '#fff',
-                                                        border: 'none',
-                                                        borderRadius: 4,
-                                                        fontWeight: 500
+                                                        cursor: isOwner ? 'pointer' : 'not-allowed'
                                                     }}
-                                                    value={lead.status_id}
-                                                    onChange={e => updateStatus(lead.uuid, e.target.value ? parseInt(e.target.value) : null)}
+                                                    onClick={() => isOwner && toggleInGroup(lead.uuid, lead.in_group)}
+                                                    disabled={!isOwner}
                                                 >
-                                                    <option value="" style={{ background: '#1e293b', color: '#fff' }}>- Selecione -</option>
-                                                    {statuses.map(s => <option key={s.id} value={s.id} style={{ background: '#1e293b', color: '#fff' }}>{s.name}</option>)}
-                                                </select>
-                                            ) : (
-                                                <select
-                                                    className="form-select"
-                                                    style={{ width: 'auto', padding: '4px 8px', fontSize: '0.75rem' }}
-                                                    value=""
-                                                    onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}
-                                                >
-                                                    <option value="">- Selecione -</option>
-                                                    {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                </select>
-                                            )}
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <button
-                                                className="btn btn-ghost btn-sm"
-                                                onClick={() => toggleChecking(lead.uuid, lead.checking)}
-                                                style={{ padding: 4 }}
-                                            >
-                                                {lead.checking ? <CheckSquare size={18} color="#10b981" /> : <Square size={18} color="#6b7280" />}
-                                            </button>
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            <button
-                                                className="btn btn-ghost btn-sm"
-                                                onClick={() => toggleSaleCompleted(lead.uuid, lead.sale_completed)}
-                                                style={{ padding: 4 }}
-                                            >
-                                                {lead.sale_completed ? <CheckSquare size={18} color="#6366f1" /> : <Square size={18} color="#6b7280" />}
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <button
-                                                className="btn btn-sm"
-                                                style={{
-                                                    background: lead.in_group ? '#10b98122' : '#f59e0b22',
-                                                    color: lead.in_group ? '#10b981' : '#f59e0b',
-                                                    border: 'none',
-                                                    padding: '4px 8px',
-                                                    fontSize: '0.75rem'
-                                                }}
-                                                onClick={() => toggleInGroup(lead.uuid, lead.in_group)}
-                                            >
-                                                {lead.in_group ? <UserCheck size={12} /> : <UserX size={12} />}
-                                                {lead.in_group ? ' Sim' : ' Não'}
-                                            </button>
-                                        </td>
-                                        {isAdmin && (
-                                            <td style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                                                {lead.campaign_name || '-'}
+                                                    {lead.in_group ? <UserCheck size={12} /> : <UserX size={12} />}
+                                                    {lead.in_group ? ' Sim' : ' Não'}
+                                                </button>
                                             </td>
-                                        )}
-                                        <td style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{formatDate(lead.created_at)}</td>
-                                        <td>
-                                            <button className="btn btn-ghost btn-sm" style={{ padding: 4 }} onClick={() => { setSelectedLead(lead); setObservation(''); }}>
-                                                <MessageSquare size={14} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            {isAdmin && (
+                                                <td style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                                    {lead.campaign_name || '-'}
+                                                </td>
+                                            )}
+                                            <td style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{formatDate(lead.created_at)}</td>
+                                            <td>
+                                                <button className="btn btn-ghost btn-sm" style={{ padding: 4 }} onClick={() => { setSelectedLead(lead); setObservation(''); }}>
+                                                    <MessageSquare size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

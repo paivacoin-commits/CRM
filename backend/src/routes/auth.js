@@ -65,7 +65,7 @@ router.post('/login', async (req, res) => {
         console.log('✅ Login successful!');
         res.json({
             token,
-            user: { uuid: user.uuid, name: user.name, email: user.email, role: user.role }
+            user: { id: user.id, uuid: user.uuid, name: user.name, email: user.email, role: user.role }
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -92,7 +92,7 @@ router.get('/me', async (req, res) => {
         }
 
         res.json({
-            user: { uuid: user.uuid, name: user.name, email: user.email, role: user.role }
+            user: { id: user.id, uuid: user.uuid, name: user.name, email: user.email, role: user.role }
         });
     } catch (error) {
         res.status(401).json({ error: 'Token inválido' });

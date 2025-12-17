@@ -15,14 +15,23 @@ router.use(authenticate);
  */
 router.get('/', async (req, res) => {
     try {
-        const { status, search, campaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 } = req.query;
+        const { status, search, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 } = req.query;
 
-        // Para vendedores, força o seller_id para o próprio ID
-        // Para admins, usa o seller_id do query param (se fornecido)
+        // Lógica de filtro de vendedor:
+        // - Admin: vê todos, pode filtrar por seller_id
+        // - Vendedora: vê só seus leads por padrão
+        // - Vendedora com pesquisa: vê todos (pesquisa geral)
         let effectiveSellerId = null;
+
         if (req.user.role === 'seller') {
-            effectiveSellerId = req.user.id;
+            // Se está pesquisando, mostra todos os leads (pesquisa geral)
+            // Caso contrário, mostra apenas os leads da vendedora
+            if (!search) {
+                effectiveSellerId = req.user.id;
+            }
+            // Se pesquisar, effectiveSellerId fica null = mostra todos
         } else if (seller_id) {
+            // Admin pode filtrar por vendedor
             effectiveSellerId = parseInt(seller_id);
         }
 
@@ -30,6 +39,7 @@ router.get('/', async (req, res) => {
             status,
             search,
             campaign_id,
+            subcampaign_id,
             in_group,
             show_inactive: show_inactive === 'true',
             seller_id: effectiveSellerId,
@@ -111,9 +121,7 @@ router.patch('/:uuid/status', async (req, res) => {
         const { uuid } = req.params;
         const { status_id } = req.body;
 
-        if (!status_id) {
-            return res.status(400).json({ error: 'Status é obrigatório' });
-        }
+        // status_id pode ser null para limpar o status
 
         const lead = await db.getLeadByUuid(uuid);
         if (!lead) {
@@ -124,7 +132,7 @@ router.patch('/:uuid/status', async (req, res) => {
             return res.status(403).json({ error: 'Sem permissão para atualizar este lead' });
         }
 
-        await db.updateLead(uuid, { status_id });
+        await db.updateLead(uuid, { status_id: status_id || null });
         res.json({ message: 'Status atualizado com sucesso' });
     } catch (error) {
         console.error('Error updating lead status:', error);

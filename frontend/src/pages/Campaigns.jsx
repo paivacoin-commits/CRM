@@ -1,20 +1,31 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
-import { FolderPlus, X, Edit2, Archive, RotateCcw, Users, AlertTriangle, Trash2 } from 'lucide-react';
+import { FolderPlus, X, Edit2, Archive, RotateCcw, Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 
 export default function Campaigns() {
     const [campaigns, setCampaigns] = useState([]);
+    const [subcampaigns, setSubcampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editCampaign, setEditCampaign] = useState(null);
     const [showArchived, setShowArchived] = useState(false);
     const [form, setForm] = useState({ name: '', description: '' });
 
+    // Subcampanha
+    const [showSubModal, setShowSubModal] = useState(false);
+    const [editSubcampaign, setEditSubcampaign] = useState(null);
+    const [subForm, setSubForm] = useState({ campaign_id: '', name: '', color: '#6366f1', description: '' });
+    const [expandedCampaigns, setExpandedCampaigns] = useState(new Set());
+
     const loadCampaigns = () => {
         api.getCampaigns({ active_only: !showArchived }).then(d => setCampaigns(d.campaigns)).finally(() => setLoading(false));
     };
 
-    useEffect(() => { loadCampaigns(); }, [showArchived]);
+    const loadSubcampaigns = () => {
+        api.getSubcampaigns({}).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
+    };
+
+    useEffect(() => { loadCampaigns(); loadSubcampaigns(); }, [showArchived]);
 
     const openNew = () => { setEditCampaign(null); setForm({ name: '', description: '' }); setShowModal(true); };
     const openEdit = (c) => { setEditCampaign(c); setForm({ name: c.name, description: c.description || '' }); setShowModal(true); };
@@ -31,7 +42,7 @@ export default function Campaigns() {
     };
 
     const handleArchive = async (uuid) => {
-        if (confirm('Tem certeza que deseja arquivar esta campanha? Os leads serão desativados.')) {
+        if (confirm('Tem certeza que deseja arquivar esta campanha?')) {
             await api.deleteCampaign(uuid);
             loadCampaigns();
         }
@@ -43,11 +54,54 @@ export default function Campaigns() {
     };
 
     const handleDelete = async (uuid) => {
-        if (confirm('Tem certeza que deseja EXCLUIR PERMANENTEMENTE esta campanha? Esta ação não pode ser desfeita.')) {
+        if (confirm('Tem certeza que deseja EXCLUIR PERMANENTEMENTE esta campanha?')) {
             await api.deleteCampaign(uuid);
             loadCampaigns();
         }
     };
+
+    // Subcampanha handlers
+    const openNewSub = (campaignId) => {
+        setEditSubcampaign(null);
+        setSubForm({ campaign_id: campaignId, name: '', color: '#6366f1', description: '' });
+        setShowSubModal(true);
+    };
+
+    const openEditSub = (sub) => {
+        setEditSubcampaign(sub);
+        setSubForm({ campaign_id: sub.campaign_id, name: sub.name, color: sub.color || '#6366f1', description: sub.description || '' });
+        setShowSubModal(true);
+    };
+
+    const handleSubSubmit = async (e) => {
+        e.preventDefault();
+        if (editSubcampaign) {
+            await api.updateSubcampaign(editSubcampaign.uuid, subForm);
+        } else {
+            await api.createSubcampaign(subForm);
+        }
+        setShowSubModal(false);
+        loadSubcampaigns();
+    };
+
+    const handleDeleteSub = async (uuid) => {
+        if (confirm('Excluir esta subcampanha?')) {
+            await api.deleteSubcampaign(uuid);
+            loadSubcampaigns();
+        }
+    };
+
+    const toggleExpand = (campaignId) => {
+        const newSet = new Set(expandedCampaigns);
+        if (newSet.has(campaignId)) {
+            newSet.delete(campaignId);
+        } else {
+            newSet.add(campaignId);
+        }
+        setExpandedCampaigns(newSet);
+    };
+
+    const getSubcampaignsForCampaign = (campaignId) => subcampaigns.filter(s => s.campaign_id === campaignId);
 
     return (
         <div className="fade-in">
@@ -75,56 +129,124 @@ export default function Campaigns() {
                     </div>
                 ) : (
                     <div style={{ display: 'grid', gap: 16 }}>
-                        {campaigns.map(c => (
-                            <div key={c.uuid} style={{
-                                display: 'flex', alignItems: 'center', gap: 16, padding: 20,
-                                background: 'var(--bg-primary)', borderRadius: 12, border: '1px solid var(--border)',
-                                opacity: c.is_active ? 1 : 0.6
-                            }}>
-                                <div style={{
-                                    width: 48, height: 48, borderRadius: 12,
-                                    background: c.is_active ? 'linear-gradient(135deg, var(--accent), #7c3aed)' : 'var(--border)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.2rem'
-                                }}>
-                                    {c.name.charAt(0).toUpperCase()}
-                                </div>
+                        {campaigns.map(c => {
+                            const subs = getSubcampaignsForCampaign(c.id);
+                            const isExpanded = expandedCampaigns.has(c.id);
 
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <h3 style={{ margin: 0 }}>{c.name}</h3>
-                                        {!c.is_active && <span className="badge" style={{ background: '#ef444422', color: '#ef4444' }}>Arquivada</span>}
-                                    </div>
-                                    {c.description && <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{c.description}</p>}
-                                </div>
+                            return (
+                                <div key={c.uuid}>
+                                    {/* Campanha Principal */}
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', gap: 16, padding: 20,
+                                        background: 'var(--bg-primary)', borderRadius: isExpanded ? '12px 12px 0 0' : 12, border: '1px solid var(--border)',
+                                        opacity: c.is_active ? 1 : 0.6, cursor: 'pointer'
+                                    }} onClick={() => toggleExpand(c.id)}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24 }}>
+                                            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                        </div>
+                                        <div style={{
+                                            width: 48, height: 48, borderRadius: 12,
+                                            background: c.is_active ? 'linear-gradient(135deg, var(--accent), #7c3aed)' : 'var(--border)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.2rem'
+                                        }}>
+                                            {c.name.charAt(0).toUpperCase()}
+                                        </div>
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginRight: 16 }}>
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--accent)' }}>{c.total_leads || 0}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Leads</div>
-                                    </div>
-                                    <div style={{ textAlign: 'center' }}>
-                                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: c.not_in_group > 0 ? '#f59e0b' : '#10b981' }}>{c.not_in_group || 0}</div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Fora do grupo</div>
-                                    </div>
-                                </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <h3 style={{ margin: 0 }}>{c.name}</h3>
+                                                {!c.is_active && <span className="badge" style={{ background: '#ef444422', color: '#ef4444' }}>Arquivada</span>}
+                                                <span className="badge" style={{ background: 'var(--accent)', color: '#fff', fontSize: '0.65rem' }}>
+                                                    {subs.length} sub
+                                                </span>
+                                            </div>
+                                            {c.description && <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{c.description}</p>}
+                                        </div>
 
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(c)}><Edit2 size={14} /></button>
-                                    {c.is_active ? (
-                                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleArchive(c.uuid)} title="Arquivar"><Archive size={14} /></button>
-                                    ) : (
-                                        <>
-                                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--success)' }} onClick={() => handleActivate(c.uuid)} title="Reativar"><RotateCcw size={14} /></button>
-                                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(c.uuid)} title="Excluir permanentemente"><Trash2 size={14} /></button>
-                                        </>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginRight: 16 }}>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--accent)' }}>{c.total_leads || 0}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Leads</div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
+                                            <button className="btn btn-ghost btn-sm" onClick={() => openEdit(c)}><Edit2 size={14} /></button>
+                                            {c.is_active ? (
+                                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleArchive(c.uuid)} title="Arquivar"><Archive size={14} /></button>
+                                            ) : (
+                                                <>
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--success)' }} onClick={() => handleActivate(c.uuid)} title="Reativar"><RotateCcw size={14} /></button>
+                                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(c.uuid)} title="Excluir"><Trash2 size={14} /></button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Subcampanhas */}
+                                    {isExpanded && (
+                                        <div style={{
+                                            background: 'var(--bg-secondary)',
+                                            border: '1px solid var(--border)',
+                                            borderTop: 'none',
+                                            borderRadius: '0 0 12px 12px',
+                                            padding: 16
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                                    Subcampanhas ({subs.length})
+                                                </span>
+                                                <button className="btn btn-sm" onClick={() => openNewSub(c.id)}>
+                                                    <Plus size={14} /> Nova Subcampanha
+                                                </button>
+                                            </div>
+
+                                            {subs.length === 0 ? (
+                                                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center', padding: 20 }}>
+                                                    Nenhuma subcampanha. Crie uma para marcar leads importados.
+                                                </p>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                                    {subs.map(sub => (
+                                                        <div key={sub.uuid} style={{
+                                                            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                                                            background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border)'
+                                                        }}>
+                                                            <span style={{
+                                                                width: 12, height: 12, borderRadius: '50%',
+                                                                background: sub.color || '#6366f1'
+                                                            }} />
+                                                            <span style={{ fontWeight: 500 }}>{sub.name}</span>
+                                                            <span style={{
+                                                                background: 'var(--accent)',
+                                                                color: '#fff',
+                                                                padding: '2px 6px',
+                                                                borderRadius: 4,
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: 600
+                                                            }}>
+                                                                {sub.total_leads || 0}
+                                                            </span>
+                                                            <button className="btn btn-ghost btn-sm" style={{ padding: 2 }} onClick={() => openEditSub(sub)}>
+                                                                <Edit2 size={12} />
+                                                            </button>
+                                                            <button className="btn btn-ghost btn-sm" style={{ padding: 2, color: 'var(--danger)' }} onClick={() => handleDeleteSub(sub.uuid)}>
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
+            {/* Modal Campanha */}
             {showModal && (
                 <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
                     <div className="modal slide-up">
@@ -142,6 +264,36 @@ export default function Campaigns() {
                                 <textarea className="form-textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Notas sobre esta campanha..." />
                             </div>
                             <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>{editCampaign ? 'Salvar' : 'Criar Campanha'}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Subcampanha */}
+            {showSubModal && (
+                <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowSubModal(false); }}>
+                    <div className="modal slide-up">
+                        <div className="modal-header">
+                            <h3>{editSubcampaign ? 'Editar Subcampanha' : 'Nova Subcampanha'}</h3>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowSubModal(false)}><X size={18} /></button>
+                        </div>
+                        <form onSubmit={handleSubSubmit} autoComplete="off">
+                            <div className="form-group">
+                                <label className="form-label">Nome da Subcampanha</label>
+                                <input className="form-input" autoComplete="off" value={subForm.name} onChange={e => setSubForm({ ...subForm, name: e.target.value })} placeholder="Ex: Lista VIP, Remarketing, etc." required />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Cor do Marcador</label>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <input type="color" value={subForm.color} onChange={e => setSubForm({ ...subForm, color: e.target.value })} style={{ width: 50, height: 40, padding: 0, border: 'none', borderRadius: 8 }} />
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Esta cor aparecerá como ponto ao lado do nome do lead</span>
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Descrição (opcional)</label>
+                                <textarea className="form-textarea" value={subForm.description} onChange={e => setSubForm({ ...subForm, description: e.target.value })} rows={2} placeholder="Notas..." />
+                            </div>
+                            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>{editSubcampaign ? 'Salvar' : 'Criar Subcampanha'}</button>
                         </form>
                     </div>
                 </div>
