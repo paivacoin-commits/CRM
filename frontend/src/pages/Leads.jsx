@@ -302,6 +302,7 @@ export default function Leads() {
                     </div>
                     <select className="form-select" style={{ width: 130 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                         <option value="">Status</option>
+                        <option value="null" style={{ color: '#f59e0b' }}>⚠ Sem status</option>
                         {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     {campaigns.length > 0 && (
@@ -364,20 +365,20 @@ export default function Leads() {
             {/* Tabela */}
             <div className="card">
                 {loading ? <p>Carregando...</p> : leads.length === 0 ? <p style={{ color: 'var(--text-secondary)' }}>Nenhum lead encontrado</p> : (
-                    <div className="table-container">
-                        <table>
-                            <thead><tr>
-                                {isAdmin && <th style={{ width: 40 }}></th>}
-                                <th>Nome</th>
-                                <th>Telefone</th>
-                                <th>Vendedora</th>
-                                <th>Status</th>
-                                <th>Checking</th>
-                                <th>Venda</th>
-                                <th>Grupo</th>
-                                {isAdmin && <th>Campanha</th>}
-                                <th>Data</th>
-                                <th>Ações</th>
+                    <div className="table-container" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                        <table style={{ position: 'relative' }}>
+                            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-secondary)' }}><tr>
+                                {isAdmin && <th style={{ width: 40, background: 'var(--bg-secondary)' }}></th>}
+                                <th style={{ background: 'var(--bg-secondary)' }}>Nome</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Telefone</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Vendedora</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Status</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Checking</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Venda</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Grupo</th>
+                                {isAdmin && <th style={{ background: 'var(--bg-secondary)' }}>Campanha</th>}
+                                <th style={{ background: 'var(--bg-secondary)' }}>Data</th>
+                                <th style={{ background: 'var(--bg-secondary)' }}>Ações</th>
                             </tr></thead>
                             <tbody>
                                 {leads.map((lead, idx) => {
@@ -417,13 +418,19 @@ export default function Leads() {
                                             </td>
                                             <td>
                                                 {lead.phone ? (
-                                                    <button
-                                                        onClick={() => openWhatsappModal(lead)}
-                                                        className="whatsapp-btn"
-                                                        style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none', background: '#25D366', color: '#000', fontWeight: 500 }}
-                                                    >
-                                                        <Phone size={12} /> {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
-                                                    </button>
+                                                    isOwner ? (
+                                                        <button
+                                                            onClick={() => openWhatsappModal(lead)}
+                                                            className="whatsapp-btn"
+                                                            style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none', background: '#25D366', color: '#000', fontWeight: 500 }}
+                                                        >
+                                                            <Phone size={12} /> {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
+                                                        </button>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                            {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
+                                                        </span>
+                                                    )
                                                 ) : '-'}
                                             </td>
                                             <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
@@ -857,26 +864,17 @@ export default function Leads() {
                                 </div>
                             )}
 
-                            <button
-                                onClick={sendWhatsappDirect}
-                                style={{
-                                    width: '100%',
-                                    background: 'linear-gradient(135deg, #25D366, #128C7E)',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '14px 20px',
-                                    borderRadius: 10,
-                                    fontSize: '0.95rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 10
-                                }}
-                            >
-                                <Phone size={18} /> Abrir conversa direta
-                            </button>
+                            {/* Dica para o usuário */}
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '12px',
+                                fontSize: '0.75rem',
+                                color: 'var(--text-secondary)',
+                                borderTop: '1px solid var(--border)',
+                                marginTop: 8
+                            }}>
+                                📋 Número copiado para a área de transferência
+                            </div>
                         </div>
                     </div>
                 </div>

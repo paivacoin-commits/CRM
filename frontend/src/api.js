@@ -64,6 +64,7 @@ export const api = {
     updateStatusOrder: (order) => request('/statuses/order', { method: 'PUT', body: JSON.stringify({ order }) }),
     // WhatsApp Templates
     getWhatsAppTemplates: () => request('/whatsapp-templates'),
+    getWhatsAppTemplatesBySeller: () => request('/whatsapp-templates/by-seller'),
     createWhatsAppTemplate: (data) => request('/whatsapp-templates', { method: 'POST', body: JSON.stringify(data) }),
     updateWhatsAppTemplate: (uuid, data) => request(`/whatsapp-templates/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteWhatsAppTemplate: (uuid) => request(`/whatsapp-templates/${uuid}`, { method: 'DELETE' }),

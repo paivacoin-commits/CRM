@@ -131,33 +131,56 @@ function ApiSettings() {
 }
 
 // ==============================
-// WHATSAPP TEMPLATES TAB
+// WHATSAPP TEMPLATES TAB (ADMIN VIEW)
 // ==============================
 function WhatsAppSettings() {
-    const [templates, setTemplates] = useState([]);
+    const [sellerTemplates, setSellerTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedSeller, setSelectedSeller] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [editTemplate, setEditTemplate] = useState(null);
     const [form, setForm] = useState({ name: '', message: '' });
 
-    const loadTemplates = () => {
-        api.getWhatsAppTemplates().then(d => setTemplates(d.templates || [])).finally(() => setLoading(false));
+    const loadTemplates = async () => {
+        setLoading(true);
+        try {
+            const res = await api.getWhatsAppTemplatesBySeller();
+            setSellerTemplates(res.sellers || []);
+        } catch (err) {
+            console.error('Erro ao carregar templates:', err);
+        }
+        setLoading(false);
     };
 
     useEffect(() => { loadTemplates(); }, []);
 
-    const openNew = () => { setEditTemplate(null); setForm({ name: '', message: '' }); setShowModal(true); };
-    const openEdit = (t) => { setEditTemplate(t); setForm({ name: t.name, message: t.message }); setShowModal(true); };
+    const openNew = (sellerId) => {
+        setSelectedSeller(sellerId);
+        setEditTemplate(null);
+        setForm({ name: '', message: '' });
+        setShowModal(true);
+    };
+
+    const openEdit = (sellerId, t) => {
+        setSelectedSeller(sellerId);
+        setEditTemplate(t);
+        setForm({ name: t.name, message: t.message });
+        setShowModal(true);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (editTemplate) {
-            await api.updateWhatsAppTemplate(editTemplate.uuid, form);
-        } else {
-            await api.createWhatsAppTemplate(form);
+        try {
+            if (editTemplate) {
+                await api.updateWhatsAppTemplate(editTemplate.uuid, form);
+            } else {
+                await api.createWhatsAppTemplate({ ...form, seller_id: selectedSeller });
+            }
+            setShowModal(false);
+            loadTemplates();
+        } catch (err) {
+            alert('Erro: ' + err.message);
         }
-        setShowModal(false);
-        loadTemplates();
     };
 
     const handleDelete = async (uuid) => {
@@ -169,37 +192,114 @@ function WhatsAppSettings() {
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h3><MessageCircle size={20} style={{ marginRight: 8 }} /> Templates de WhatsApp</h3>
-                <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Template</button>
+            <div style={{ marginBottom: 20 }}>
+                <h3><MessageCircle size={20} style={{ marginRight: 8 }} /> Templates de WhatsApp por Vendedor</h3>
+                <p style={{ color: 'var(--text-secondary)', marginTop: 8, fontSize: '0.875rem' }}>
+                    Cada vendedor(a) possui seus próprios templates de mensagens. Use <code>{'{nome}'}</code> e <code>{'{produto}'}</code> para substituição automática.
+                </p>
             </div>
 
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 20, fontSize: '0.875rem' }}>
-                Crie templates de mensagens para usar ao entrar em contato com leads. Use <code>{'{nome}'}</code> e <code>{'{produto}'}</code> para substituição automática.
-            </p>
-
-            {loading ? <p>Carregando...</p> : templates.length === 0 ? (
+            {loading ? <p>Carregando...</p> : sellerTemplates.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
                     <MessageCircle size={48} style={{ marginBottom: 16, opacity: 0.5 }} />
-                    <p>Nenhum template criado ainda</p>
+                    <p>Nenhum vendedor encontrado</p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
-                    {templates.map(t => (
-                        <div key={t.uuid} style={{
-                            padding: 16, background: 'var(--bg-primary)', borderRadius: 8, border: '1px solid var(--border)'
+                <div style={{ display: 'grid', gap: 24 }}>
+                    {sellerTemplates.map(seller => (
+                        <div key={seller.seller_id} style={{
+                            background: 'var(--bg-primary)',
+                            borderRadius: 12,
+                            border: '1px solid var(--border)',
+                            overflow: 'hidden'
                         }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div>
-                                    <strong style={{ fontSize: '1rem' }}>{t.name}</strong>
-                                    <p style={{ color: 'var(--text-secondary)', marginTop: 8, whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}>
-                                        {t.message}
+                            {/* Header do Vendedor */}
+                            <div style={{
+                                padding: '16px 20px',
+                                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05))',
+                                borderBottom: '1px solid var(--border)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <div style={{
+                                        width: 40,
+                                        height: 40,
+                                        borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'white',
+                                        fontWeight: 700,
+                                        fontSize: '1rem'
+                                    }}>
+                                        {seller.seller_name?.charAt(0).toUpperCase() || '?'}
+                                    </div>
+                                    <div>
+                                        <div style={{ fontWeight: 600 }}>{seller.seller_name}</div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                            {seller.templates.length} template(s)
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => openNew(seller.seller_id)}
+                                >
+                                    <Plus size={14} /> Novo
+                                </button>
+                            </div>
+
+                            {/* Templates do Vendedor */}
+                            <div style={{ padding: 16 }}>
+                                {seller.templates.length === 0 ? (
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', textAlign: 'center', padding: '16px 0' }}>
+                                        Nenhum template criado ainda
                                     </p>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(t)}><Edit2 size={14} /></button>
-                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(t.uuid)}><Trash2 size={14} /></button>
-                                </div>
+                                ) : (
+                                    <div style={{ display: 'grid', gap: 8 }}>
+                                        {seller.templates.map(t => (
+                                            <div key={t.uuid} style={{
+                                                padding: 12,
+                                                background: 'var(--bg-secondary)',
+                                                borderRadius: 8,
+                                                border: '1px solid var(--border)'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <strong style={{ fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                            <MessageCircle size={14} color="#25D366" />
+                                                            {t.name}
+                                                        </strong>
+                                                        <p style={{
+                                                            color: 'var(--text-secondary)',
+                                                            marginTop: 6,
+                                                            whiteSpace: 'pre-wrap',
+                                                            fontSize: '0.8rem',
+                                                            lineHeight: 1.4,
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden'
+                                                        }}>
+                                                            {t.message}
+                                                        </p>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(seller.seller_id, t)}>
+                                                            <Edit2 size={12} />
+                                                        </button>
+                                                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(t.uuid)}>
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}

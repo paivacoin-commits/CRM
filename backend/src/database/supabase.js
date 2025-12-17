@@ -158,7 +158,12 @@ export const db = {
             query = query.or('is_active.eq.true,is_active.is.null');
         }
         if (seller_id) query = query.eq('seller_id', seller_id);
-        if (status) query = query.eq('status_id', status);
+        if (status === 'null') {
+            // Filtrar leads SEM status (status_id é null)
+            query = query.is('status_id', null);
+        } else if (status) {
+            query = query.eq('status_id', status);
+        }
         if (campaign_id) query = query.eq('campaign_id', campaign_id);
         if (subcampaign_id) query = query.eq('subcampaign_id', subcampaign_id);
         if (in_group !== undefined) query = query.eq('in_group', in_group === 'true');
