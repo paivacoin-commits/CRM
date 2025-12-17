@@ -33,8 +33,7 @@ export default function Leads() {
     const [selectAll, setSelectAll] = useState(false);
     const [totalSelected, setTotalSelected] = useState(0);
 
-    // Auto-refresh
-    const [autoRefresh, setAutoRefresh] = useState(true);
+    // Auto-refresh desativado
 
     // Refs para manter valores atualizados no interval
     const filtersRef = useRef({ search, statusFilter, campaignFilter, inGroupFilter, sellerFilter, page });
@@ -86,14 +85,7 @@ export default function Leads() {
         setSelectAll(false);
     }, [search, statusFilter, campaignFilter, inGroupFilter, sellerFilter]);
 
-    // Auto-refresh a cada 5 segundos
-    useEffect(() => {
-        let interval = null;
-        if (autoRefresh) {
-            interval = setInterval(loadLeads, 5000);
-        }
-        return () => { if (interval) clearInterval(interval); };
-    }, [autoRefresh, loadLeads]);
+    // Auto-refresh removido
 
     const updateStatus = async (uuid, status_id) => {
         await api.updateLeadStatus(uuid, status_id);
@@ -203,16 +195,7 @@ export default function Leads() {
     return (
         <div className="fade-in">
             <div className="page-header">
-                <h1 className="page-title">Leads {autoRefresh && <span style={{ fontSize: '0.6rem', color: '#10b981', marginLeft: 8, fontWeight: 400 }}>● LIVE</span>}</h1>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label className="toggle" style={{ transform: 'scale(0.8)' }}>
-                        <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
-                        <span className="toggle-slider"></span>
-                    </label>
-                    <span style={{ fontSize: '0.75rem', color: autoRefresh ? '#10b981' : 'var(--text-secondary)' }}>
-                        {autoRefresh ? 'Atualização automática' : 'Automático desligado'}
-                    </span>
-                </div>
+                <h1 className="page-title">Leads</h1>
             </div>
 
             {/* Filtros */}
@@ -279,7 +262,6 @@ export default function Leads() {
                             <thead><tr>
                                 {isAdmin && <th style={{ width: 40 }}></th>}
                                 <th>Nome</th>
-                                <th>Email</th>
                                 <th>Telefone</th>
                                 <th>Vendedora</th>
                                 <th>Status</th>
@@ -304,25 +286,49 @@ export default function Leads() {
                                                 </button>
                                             </td>
                                         )}
-                                        <td><strong>{lead.first_name}</strong></td>
-                                        <td style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{lead.email || '-'}</td>
+                                        <td><strong>{lead.first_name || lead.email || 'Sem nome'}</strong></td>
                                         <td>
                                             {lead.phone ? (
                                                 <button
                                                     onClick={() => openWhatsappModal(lead)}
                                                     className="whatsapp-btn"
-                                                    style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none' }}
+                                                    style={{ fontSize: '0.75rem', padding: '4px 8px', cursor: 'pointer', border: 'none', background: '#25D366', color: '#000', fontWeight: 500 }}
                                                 >
-                                                    <Phone size={12} /> {lead.phone.slice(-8).replace(/(\d{4})(\d{4})/, '$1-$2')}
+                                                    <Phone size={12} /> {lead.phone.replace(/(\d{2})(\d{2})(\d{4,5})(\d{4})/, '+$1 ($2) $3-$4')}
                                                 </button>
                                             ) : '-'}
                                         </td>
                                         <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
                                         <td>
-                                            <select className="form-select" style={{ width: 110, padding: '4px 8px', fontSize: '0.75rem' }} value={lead.status_id || ''} onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}>
-                                                {!lead.status_id && <option value="">- Selecione -</option>}
-                                                {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                            </select>
+                                            {lead.status_id ? (
+                                                <select
+                                                    className="form-select"
+                                                    style={{
+                                                        width: 'auto',
+                                                        padding: '4px 8px',
+                                                        fontSize: '0.75rem',
+                                                        background: lead.status_color || '#6b7280',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: 4,
+                                                        fontWeight: 500
+                                                    }}
+                                                    value={lead.status_id}
+                                                    onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}
+                                                >
+                                                    {statuses.map(s => <option key={s.id} value={s.id} style={{ background: '#1e293b', color: '#fff' }}>{s.name}</option>)}
+                                                </select>
+                                            ) : (
+                                                <select
+                                                    className="form-select"
+                                                    style={{ width: 'auto', padding: '4px 8px', fontSize: '0.75rem' }}
+                                                    value=""
+                                                    onChange={e => updateStatus(lead.uuid, parseInt(e.target.value))}
+                                                >
+                                                    <option value="">- Selecione -</option>
+                                                    {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                </select>
+                                            )}
                                         </td>
                                         <td style={{ textAlign: 'center' }}>
                                             <button
