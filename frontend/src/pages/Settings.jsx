@@ -444,8 +444,8 @@ function ExportLeads() {
         api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns));
     }, []);
 
-    // Gerar vCard individual
-    const generateVCard = (lead, namePattern) => {
+    // Gerar vCard individual com número sequencial
+    const generateVCard = (lead, namePattern, numero = '') => {
         // Helper para pegar valor não vazio
         const getValue = (...values) => {
             for (const v of values) {
@@ -455,7 +455,7 @@ function ExportLeads() {
             return '';
         };
 
-        const nome = getValue(lead.nome, lead.first_name, 'Contato');
+        const nome = getValue(lead.nome, lead.first_name, '');
         const produto = getValue(lead.produto, lead.product_name);
         const campanha = getValue(lead.campanha, lead.campaign_name);
         const vendedora = getValue(lead.vendedora, lead.seller_name);
@@ -478,9 +478,14 @@ function ExportLeads() {
             .replace(/^\s*-\s*/g, '')
             .trim();
 
-        // Se ainda estiver vazio, usar nome padrão
-        if (!contactName || contactName === '-') {
-            contactName = nome || 'Contato';
+        // Se o padrão não tem variáveis ou está vazio, usar o padrão como nome fixo
+        if (!contactName) {
+            contactName = namePattern.trim() || 'Contato';
+        }
+
+        // Adicionar número sequencial ao final
+        if (numero) {
+            contactName = `${contactName} ${numero}`;
         }
 
         const phone = (lead.telefone || lead.phone || '').replace(/\D/g, '');
@@ -529,14 +534,28 @@ function ExportLeads() {
                     return;
                 }
 
-                // Gerar todos os vCards
-                const vcards = leads.map(lead => generateVCard(lead, vcardNamePattern)).join('\n');
+                // Gerar todos os vCards com número sequencial
+                const vcards = leads.map((lead, index) => {
+                    const numero = String(index + 1).padStart(2, '0'); // 01, 02, 03...
+                    return generateVCard(lead, vcardNamePattern, numero);
+                }).join('\n');
 
                 const blob = new Blob([vcards], { type: 'text/vcard;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `contatos_${leads.length}.vcf`;
+                // Nome do arquivo baseado no padrão
+                const baseFileName = vcardNamePattern
+                    .replace(/{nome}/gi, '')
+                    .replace(/{produto}/gi, '')
+                    .replace(/{campanha}/gi, '')
+                    .replace(/{vendedora}/gi, '')
+                    .replace(/{status}/gi, '')
+                    .replace(/\s+/g, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^_|_$/g, '')
+                    .trim() || 'contatos';
+                a.download = `${baseFileName}_${leads.length}.vcf`;
                 a.click();
 
                 alert(`✅ Exportados ${leads.length} contatos em formato vCard!`);
@@ -621,15 +640,23 @@ function ExportLeads() {
                         borderRadius: 8,
                         fontSize: '0.85rem'
                     }}>
-                        <strong>Preview:</strong>
-                        <div style={{ marginTop: 4, color: 'var(--accent)', fontFamily: 'monospace' }}>
-                            {vcardNamePattern
-                                .replace(/{nome}/gi, 'Maria Silva')
-                                .replace(/{produto}/gi, 'Curso ABC')
-                                .replace(/{campanha}/gi, 'Black Friday')
-                                .replace(/{vendedora}/gi, 'Vendedora 1')
-                                .replace(/{status}/gi, 'Novo')
-                            }
+                        <strong>Preview (3 primeiros):</strong>
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {[1, 2, 3].map(n => {
+                                const num = String(n).padStart(2, '0');
+                                const preview = vcardNamePattern
+                                    .replace(/{nome}/gi, 'Maria Silva')
+                                    .replace(/{produto}/gi, 'Curso ABC')
+                                    .replace(/{campanha}/gi, 'Black Friday')
+                                    .replace(/{vendedora}/gi, 'Vendedora 1')
+                                    .replace(/{status}/gi, 'Novo')
+                                    .trim() || vcardNamePattern.trim();
+                                return (
+                                    <div key={n} style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>
+                                        {preview} {num}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -642,6 +669,7 @@ function ExportLeads() {
             {format === 'vcard' && (
                 <p style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     💡 O arquivo .vcf pode ser importado diretamente na agenda do celular (iPhone, Android) ou no WhatsApp Business.
+                    <br />📌 Cada contato será numerado automaticamente (01, 02, 03...) para fácil identificação.
                 </p>
             )}
         </div>
