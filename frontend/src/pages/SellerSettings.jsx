@@ -11,13 +11,18 @@ export default function SellerSettings() {
 
     // Estados para exportação vCard
     const [vcardName, setVcardName] = useState('');
+    const [campaigns, setCampaigns] = useState([]);
+    const [selectedCampaign, setSelectedCampaign] = useState('');
     const [exporting, setExporting] = useState(false);
 
     const loadTemplates = () => {
         api.getWhatsAppTemplates().then(d => setTemplates(d.templates || [])).finally(() => setLoading(false));
     };
 
-    useEffect(() => { loadTemplates(); }, []);
+    useEffect(() => {
+        loadTemplates();
+        api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns || []));
+    }, []);
 
     const openNew = () => { setEditTemplate(null); setForm({ name: '', message: '' }); setShowModal(true); };
     const openEdit = (t) => { setEditTemplate(t); setForm({ name: t.name, message: t.message }); setShowModal(true); };
@@ -70,8 +75,12 @@ export default function SellerSettings() {
 
         setExporting(true);
         try {
-            // Buscar leads da vendedora (sem filtro de seller_id, o backend já filtra pelo usuário logado)
-            const data = await api.getLeads({ limit: 10000 });
+            // Buscar leads da vendedora com filtro de campanha
+            const params = { limit: 10000 };
+            if (selectedCampaign) {
+                params.campaign_id = selectedCampaign;
+            }
+            const data = await api.getLeads(params);
             const leads = data.leads || [];
 
             if (leads.length === 0) {
@@ -121,14 +130,28 @@ export default function SellerSettings() {
                     borderRadius: 12,
                     border: '1px solid rgba(37, 211, 102, 0.3)'
                 }}>
-                    <div className="form-group" style={{ marginBottom: 16 }}>
-                        <label className="form-label">📇 Nome base dos contatos</label>
-                        <input
-                            className="form-input"
-                            value={vcardName}
-                            onChange={e => setVcardName(e.target.value)}
-                            placeholder="Ex: Lead Recuperação, Cliente, etc."
-                        />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">📇 Nome base dos contatos</label>
+                            <input
+                                className="form-input"
+                                value={vcardName}
+                                onChange={e => setVcardName(e.target.value)}
+                                placeholder="Ex: Lead Recuperação, Cliente, etc."
+                            />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label className="form-label">📁 Filtrar por Campanha</label>
+                            <select
+                                className="form-select"
+                                value={selectedCampaign}
+                                onChange={e => setSelectedCampaign(e.target.value)}
+                            >
+                                <option value="">Todos os meus leads</option>
+                                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
                     </div>
 
                     {vcardName.trim() && (
