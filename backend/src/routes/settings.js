@@ -128,10 +128,11 @@ router.put('/distribution-order', async (req, res) => {
  */
 router.get('/export/leads', async (req, res) => {
     try {
-        const { seller_id, format = 'json' } = req.query;
+        const { seller_id, campaign_id, format = 'json' } = req.query;
 
         const filters = {
             seller_id: seller_id || null,
+            campaign_id: campaign_id || null,
             show_inactive: true,
             page: 1,
             limit: 10000
@@ -144,6 +145,7 @@ router.get('/export/leads', async (req, res) => {
             email: l.email,
             telefone: l.phone,
             produto: l.product_name,
+            campanha: l.campaign_name,
             data_entrada: l.created_at,
             status: l.status_name,
             vendedora: l.seller_name,

@@ -432,25 +432,114 @@ function DistributionOrder() {
 // ==============================
 function ExportLeads() {
     const [sellers, setSellers] = useState([]);
+    const [campaigns, setCampaigns] = useState([]);
     const [selectedSeller, setSelectedSeller] = useState('');
+    const [selectedCampaign, setSelectedCampaign] = useState('');
     const [format, setFormat] = useState('json');
+    const [vcardNamePattern, setVcardNamePattern] = useState('{nome} - {produto}');
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => { api.getSellers().then(d => setSellers(d.sellers)); }, []);
+    useEffect(() => {
+        api.getSellers().then(d => setSellers(d.sellers));
+        api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns));
+    }, []);
+
+    // Gerar vCard individual
+    const generateVCard = (lead, namePattern) => {
+        // Helper para pegar valor não vazio
+        const getValue = (...values) => {
+            for (const v of values) {
+                if (v && v.trim && v.trim() !== '') return v.trim();
+                if (v && typeof v === 'string' && v !== '') return v;
+            }
+            return '';
+        };
+
+        const nome = getValue(lead.nome, lead.first_name, 'Contato');
+        const produto = getValue(lead.produto, lead.product_name);
+        const campanha = getValue(lead.campanha, lead.campaign_name);
+        const vendedora = getValue(lead.vendedora, lead.seller_name);
+        const status = getValue(lead.status, lead.status_name);
+
+        // Substituir variáveis no padrão do nome
+        let contactName = namePattern
+            .replace(/{nome}/gi, nome)
+            .replace(/{produto}/gi, produto)
+            .replace(/{campanha}/gi, campanha)
+            .replace(/{vendedora}/gi, vendedora)
+            .replace(/{status}/gi, status)
+            .trim();
+
+        // Limpar espaços extras e hífens órfãos
+        contactName = contactName
+            .replace(/\s+/g, ' ')
+            .replace(/\s*-\s*-\s*/g, ' - ')
+            .replace(/\s*-\s*$/g, '')
+            .replace(/^\s*-\s*/g, '')
+            .trim();
+
+        // Se ainda estiver vazio, usar nome padrão
+        if (!contactName || contactName === '-') {
+            contactName = nome || 'Contato';
+        }
+
+        const phone = (lead.telefone || lead.phone || '').replace(/\D/g, '');
+        const email = lead.email || '';
+
+        let vcard = 'BEGIN:VCARD\r\n';
+        vcard += 'VERSION:3.0\r\n';
+        vcard += `FN:${contactName}\r\n`;
+        vcard += `N:${contactName};;;;\r\n`;
+        if (phone) {
+            vcard += `TEL;TYPE=CELL:+${phone}\r\n`;
+        }
+        if (email) {
+            vcard += `EMAIL:${email}\r\n`;
+        }
+        vcard += 'END:VCARD\r\n';
+
+        return vcard;
+    };
 
     const handleExport = async () => {
         setLoading(true);
         try {
-            const params = { format };
+            const params = { format: 'json' }; // Sempre buscar JSON do servidor
             if (selectedSeller) params.seller_id = selectedSeller;
+            if (selectedCampaign) params.campaign_id = selectedCampaign;
 
             if (format === 'csv') {
                 const token = localStorage.getItem('token');
-                const res = await fetch(`/api/settings/export/leads?${new URLSearchParams(params)}`, { headers: { Authorization: `Bearer ${token}` } });
+                const queryParams = new URLSearchParams({ format: 'csv' });
+                if (selectedSeller) queryParams.append('seller_id', selectedSeller);
+                if (selectedCampaign) queryParams.append('campaign_id', selectedCampaign);
+
+                const res = await fetch(`/api/settings/export/leads?${queryParams}`, { headers: { Authorization: `Bearer ${token}` } });
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = 'leads_export.csv'; a.click();
+            } else if (format === 'vcard') {
+                // Buscar dados e gerar vCard
+                const data = await api.exportLeads(params);
+                const leads = data.leads || [];
+
+                if (leads.length === 0) {
+                    alert('Nenhum lead encontrado para exportar');
+                    return;
+                }
+
+                // Gerar todos os vCards
+                const vcards = leads.map(lead => generateVCard(lead, vcardNamePattern)).join('\n');
+
+                const blob = new Blob([vcards], { type: 'text/vcard;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `contatos_${leads.length}.vcf`;
+                a.click();
+
+                alert(`✅ Exportados ${leads.length} contatos em formato vCard!`);
             } else {
                 const data = await api.exportLeads(params);
                 const blob = new Blob([JSON.stringify(data.leads, null, 2)], { type: 'application/json' });
@@ -465,7 +554,7 @@ function ExportLeads() {
         <div className="card">
             <h3 style={{ marginBottom: 24 }}>📥 Exportar Leads</h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                 <div className="form-group">
                     <label className="form-label">Filtrar por Vendedora</label>
                     <select className="form-select" value={selectedSeller} onChange={e => setSelectedSeller(e.target.value)}>
@@ -475,17 +564,86 @@ function ExportLeads() {
                 </div>
 
                 <div className="form-group">
+                    <label className="form-label">Filtrar por Campanha</label>
+                    <select className="form-select" value={selectedCampaign} onChange={e => setSelectedCampaign(e.target.value)}>
+                        <option value="">Todas as campanhas</option>
+                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="form-group">
                     <label className="form-label">Formato</label>
                     <select className="form-select" value={format} onChange={e => setFormat(e.target.value)}>
                         <option value="json">JSON</option>
                         <option value="csv">CSV (Excel)</option>
+                        <option value="vcard">📇 vCard (Contatos)</option>
                     </select>
                 </div>
             </div>
 
-            <button className="btn btn-primary" onClick={handleExport} disabled={loading} style={{ marginTop: 16 }}>
-                <Download size={16} /> {loading ? 'Exportando...' : 'Exportar Leads'}
+            {/* Opções do vCard */}
+            {format === 'vcard' && (
+                <div style={{
+                    marginTop: 16,
+                    padding: 20,
+                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.05))',
+                    borderRadius: 12,
+                    border: '1px solid rgba(99, 102, 241, 0.3)'
+                }}>
+                    <div className="form-group" style={{ marginBottom: 16 }}>
+                        <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            📇 Nome do contato (padrão)
+                        </label>
+                        <input
+                            className="form-input"
+                            value={vcardNamePattern}
+                            onChange={e => setVcardNamePattern(e.target.value)}
+                            placeholder="{nome} - {produto}"
+                            style={{ fontFamily: 'monospace' }}
+                        />
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <strong>Variáveis disponíveis:</strong>
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{nome}'}</code>
+                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{produto}'}</code>
+                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{campanha}'}</code>
+                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{vendedora}'}</code>
+                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{status}'}</code>
+                        </div>
+                    </div>
+
+                    <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        background: 'var(--bg-primary)',
+                        borderRadius: 8,
+                        fontSize: '0.85rem'
+                    }}>
+                        <strong>Preview:</strong>
+                        <div style={{ marginTop: 4, color: 'var(--accent)', fontFamily: 'monospace' }}>
+                            {vcardNamePattern
+                                .replace(/{nome}/gi, 'Maria Silva')
+                                .replace(/{produto}/gi, 'Curso ABC')
+                                .replace(/{campanha}/gi, 'Black Friday')
+                                .replace(/{vendedora}/gi, 'Vendedora 1')
+                                .replace(/{status}/gi, 'Novo')
+                            }
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <button className="btn btn-primary" onClick={handleExport} disabled={loading} style={{ marginTop: 20 }}>
+                <Download size={16} /> {loading ? 'Exportando...' : format === 'vcard' ? 'Baixar vCard (.vcf)' : 'Exportar Leads'}
             </button>
+
+            {format === 'vcard' && (
+                <p style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    💡 O arquivo .vcf pode ser importado diretamente na agenda do celular (iPhone, Android) ou no WhatsApp Business.
+                </p>
+            )}
         </div>
     );
 }
