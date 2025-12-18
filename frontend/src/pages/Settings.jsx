@@ -611,49 +611,30 @@ function ExportLeads() {
                 }}>
                     <div className="form-group" style={{ marginBottom: 16 }}>
                         <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            📇 Nome do contato (padrão)
+                            📇 Nome base dos contatos
                         </label>
                         <input
                             className="form-input"
                             value={vcardNamePattern}
                             onChange={e => setVcardNamePattern(e.target.value)}
-                            placeholder="{nome} - {produto}"
-                            style={{ fontFamily: 'monospace' }}
+                            placeholder="Ex: Lead Recuperação, Cliente VIP, etc."
                         />
                     </div>
 
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                        <strong>Variáveis disponíveis:</strong>
-                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{nome}'}</code>
-                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{produto}'}</code>
-                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{campanha}'}</code>
-                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{vendedora}'}</code>
-                            <code style={{ background: 'var(--bg-primary)', padding: '4px 8px', borderRadius: 4 }}>{'{status}'}</code>
-                        </div>
-                    </div>
-
                     <div style={{
-                        marginTop: 16,
                         padding: 12,
                         background: 'var(--bg-primary)',
                         borderRadius: 8,
                         fontSize: '0.85rem'
                     }}>
-                        <strong>Preview (3 primeiros):</strong>
+                        <strong>Preview:</strong>
                         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {[1, 2, 3].map(n => {
                                 const num = String(n).padStart(2, '0');
-                                const preview = vcardNamePattern
-                                    .replace(/{nome}/gi, 'Maria Silva')
-                                    .replace(/{produto}/gi, 'Curso ABC')
-                                    .replace(/{campanha}/gi, 'Black Friday')
-                                    .replace(/{vendedora}/gi, 'Vendedora 1')
-                                    .replace(/{status}/gi, 'Novo')
-                                    .trim() || vcardNamePattern.trim();
+                                const baseName = vcardNamePattern.trim() || 'Contato';
                                 return (
                                     <div key={n} style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>
-                                        {preview} {num}
+                                        {baseName} {num}
                                     </div>
                                 );
                             })}
@@ -669,7 +650,6 @@ function ExportLeads() {
             {format === 'vcard' && (
                 <p style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     💡 O arquivo .vcf pode ser importado diretamente na agenda do celular (iPhone, Android) ou no WhatsApp Business.
-                    <br />📌 Cada contato será numerado automaticamente (01, 02, 03...) para fácil identificação.
                 </p>
             )}
         </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Settings as SettingsIcon, MessageCircle, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Settings as SettingsIcon, MessageCircle, Plus, Edit2, Trash2, X, Download } from 'lucide-react';
 
 export default function SellerSettings() {
     const [templates, setTemplates] = useState([]);
@@ -8,6 +8,10 @@ export default function SellerSettings() {
     const [showModal, setShowModal] = useState(false);
     const [editTemplate, setEditTemplate] = useState(null);
     const [form, setForm] = useState({ name: '', message: '' });
+
+    // Estados para exportação vCard
+    const [vcardName, setVcardName] = useState('');
+    const [exporting, setExporting] = useState(false);
 
     const loadTemplates = () => {
         api.getWhatsAppTemplates().then(d => setTemplates(d.templates || [])).finally(() => setLoading(false));
@@ -36,12 +40,132 @@ export default function SellerSettings() {
         }
     };
 
+    // Função para gerar vCard
+    const generateVCard = (lead, baseName, numero) => {
+        const contactName = `${baseName} ${numero}`;
+        const phone = (lead.telefone || lead.phone || '').replace(/\D/g, '');
+        const email = lead.email || '';
+
+        let vcard = 'BEGIN:VCARD\r\n';
+        vcard += 'VERSION:3.0\r\n';
+        vcard += `FN:${contactName}\r\n`;
+        vcard += `N:${contactName};;;;\r\n`;
+        if (phone) {
+            vcard += `TEL;TYPE=CELL:+${phone}\r\n`;
+        }
+        if (email) {
+            vcard += `EMAIL:${email}\r\n`;
+        }
+        vcard += 'END:VCARD\r\n';
+
+        return vcard;
+    };
+
+    // Exportar leads da vendedora como vCard
+    const handleExportVCard = async () => {
+        if (!vcardName.trim()) {
+            alert('Digite um nome base para os contatos');
+            return;
+        }
+
+        setExporting(true);
+        try {
+            // Buscar leads da vendedora (sem filtro de seller_id, o backend já filtra pelo usuário logado)
+            const data = await api.getLeads({ limit: 10000 });
+            const leads = data.leads || [];
+
+            if (leads.length === 0) {
+                alert('Nenhum lead encontrado para exportar');
+                return;
+            }
+
+            // Gerar vCards
+            const vcards = leads.map((lead, index) => {
+                const numero = String(index + 1).padStart(2, '0');
+                return generateVCard(lead, vcardName.trim(), numero);
+            }).join('\n');
+
+            // Download
+            const blob = new Blob([vcards], { type: 'text/vcard;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${vcardName.trim().replace(/\s+/g, '_')}_${leads.length}.vcf`;
+            a.click();
+
+            alert(`✅ Exportados ${leads.length} contatos!`);
+        } catch (err) {
+            alert('Erro ao exportar: ' + err.message);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <div className="fade-in">
             <div className="page-header">
                 <h1 className="page-title"><SettingsIcon size={28} style={{ marginRight: 12 }} />Minhas Configurações</h1>
             </div>
 
+            {/* Card de Exportação vCard */}
+            <div className="card" style={{ marginBottom: 24 }}>
+                <h3 style={{ marginBottom: 16 }}><Download size={20} style={{ marginRight: 8 }} /> Exportar Meus Contatos</h3>
+
+                <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: '0.875rem' }}>
+                    Exporte seus leads em formato vCard (.vcf) para importar no celular ou WhatsApp Business.
+                </p>
+
+                <div style={{
+                    padding: 20,
+                    background: 'linear-gradient(135deg, rgba(37, 211, 102, 0.1), rgba(18, 140, 126, 0.05))',
+                    borderRadius: 12,
+                    border: '1px solid rgba(37, 211, 102, 0.3)'
+                }}>
+                    <div className="form-group" style={{ marginBottom: 16 }}>
+                        <label className="form-label">📇 Nome base dos contatos</label>
+                        <input
+                            className="form-input"
+                            value={vcardName}
+                            onChange={e => setVcardName(e.target.value)}
+                            placeholder="Ex: Lead Recuperação, Cliente, etc."
+                        />
+                    </div>
+
+                    {vcardName.trim() && (
+                        <div style={{
+                            padding: 12,
+                            background: 'var(--bg-primary)',
+                            borderRadius: 8,
+                            fontSize: '0.85rem',
+                            marginBottom: 16
+                        }}>
+                            <strong>Preview:</strong>
+                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {[1, 2, 3].map(n => (
+                                    <div key={n} style={{ color: '#25D366', fontFamily: 'monospace' }}>
+                                        {vcardName.trim()} {String(n).padStart(2, '0')}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleExportVCard}
+                        disabled={exporting || !vcardName.trim()}
+                        style={{ background: 'linear-gradient(135deg, #25D366, #128C7E)' }}
+                    >
+                        <Download size={16} /> {exporting ? 'Exportando...' : 'Baixar vCard (.vcf)'}
+                    </button>
+
+                    <p style={{ marginTop: 12, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        💡 O arquivo pode ser importado diretamente na agenda do celular.
+                    </p>
+                </div>
+            </div>
+
+            {/* Card de Templates WhatsApp */}
             <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                     <h3><MessageCircle size={20} style={{ marginRight: 8 }} /> Templates de WhatsApp</h3>
