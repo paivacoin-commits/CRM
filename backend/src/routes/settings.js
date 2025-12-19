@@ -266,24 +266,26 @@ router.post('/restore-backup', async (req, res) => {
                     restored++;
                     console.log(`✅ Lead atualizado: ${updateData.first_name} -> vendedora ${sellerId}, status_id=${updateData.status_id}`);
                 } else {
-                    // CRIAR lead novo com TODOS os dados do backup
-                    const newLead = await db.createLead({
-                        uuid: lead.uuid || uuidv4(),
+                    // CRIAR lead novo com dados do backup
+                    const createData = {
+                        uuid: uuidv4(), // Sempre novo UUID para evitar conflitos
                         first_name: leadNome,
-                        email: leadEmail,
-                        phone: leadPhone,
-                        product_name: leadProduto,
-                        seller_id: sellerId || lead.seller_id,
+                        email: leadEmail || null,
+                        phone: leadPhone || null,
+                        product_name: leadProduto || null,
+                        seller_id: sellerId || lead.seller_id || null,
                         status_id: lead.status_id || null,
                         in_group: lead.in_group !== undefined ? lead.in_group : true,
-                        checking: lead.checking || false,
+                        checking: lead.checking === true,
                         campaign_id: lead.campaign_id || null,
                         subcampaign_id: lead.subcampaign_id || null,
-                        notes: lead.notes || lead.observacoes || null,
                         source: 'restore'
-                    });
+                    };
+
+                    console.log('📝 Criando lead:', JSON.stringify(createData));
+                    const newLead = await db.createLead(createData);
                     created++;
-                    console.log(`🆕 Lead criado: ${leadNome} -> vendedora ${sellerId}, status_id=${lead.status_id}`);
+                    console.log(`🆕 Lead criado: ${leadNome}`);
                 }
             } catch (err) {
                 console.error('❌ Erro ao restaurar lead:', err.message, err);
