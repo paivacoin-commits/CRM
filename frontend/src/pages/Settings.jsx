@@ -512,7 +512,7 @@ function BackupSettings() {
         try {
             // Enviar leads para restauração
             const result = await api.restoreBackup({ leads: backupFile.leads });
-            alert(`✅ Restauração concluída!\n\n📊 ${result.restored || 0} leads restaurados\n📝 ${result.skipped || 0} leads ignorados`);
+            alert(`✅ Restauração concluída!\n\n🆕 ${result.created || 0} leads criados\n📊 ${result.restored || 0} leads atualizados\n📝 ${result.skipped || 0} leads ignorados`);
             setBackupFile(null);
             setPreviewData(null);
         } catch (err) {

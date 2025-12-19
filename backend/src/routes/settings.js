@@ -286,7 +286,8 @@ router.post('/restore-backup', async (req, res) => {
                     console.log(`🆕 Lead criado: ${leadNome} -> vendedora ${sellerId}, status_id=${lead.status_id}`);
                 }
             } catch (err) {
-                console.error('❌ Erro ao restaurar lead:', err.message);
+                console.error('❌ Erro ao restaurar lead:', err.message, err);
+                console.error('   Lead data:', JSON.stringify(lead).substring(0, 200));
                 skipped++;
             }
         }
