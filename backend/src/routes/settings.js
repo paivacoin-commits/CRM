@@ -147,9 +147,8 @@ router.get('/export/leads', async (req, res) => {
             if (!schedulesByLead[s.lead_id]) schedulesByLead[s.lead_id] = [];
             schedulesByLead[s.lead_id].push({
                 scheduled_at: s.scheduled_at,
-                notes: s.notes,
-                status: s.status,
-                type: s.type
+                observation: s.observation,
+                completed: s.completed
             });
         });
 
@@ -289,14 +288,13 @@ router.post('/restore-backup', async (req, res) => {
                     for (const agend of lead.agendamentos) {
                         try {
                             await db.createSchedule({
-                                uuid: uuidv4(),
                                 lead_id: newLead.id,
-                                seller_id: sellerId,
                                 scheduled_at: agend.scheduled_at,
-                                notes: agend.notes || null,
-                                status: agend.status || 'pending',
-                                type: agend.type || 'contact'
+                                observation: agend.observation || agend.notes || null,
+                                completed: agend.completed || false,
+                                created_by: sellerId || 1
                             });
+                            console.log(`   📅 Agendamento restaurado`);
                         } catch (schedErr) {
                             console.error('   ❌ Erro agendamento:', schedErr.message);
                         }
