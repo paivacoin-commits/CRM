@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
-import { Settings as SettingsIcon, Key, Download, Upload, ArrowUpDown, Copy, Check, RefreshCw, GripVertical, X, History, RotateCcw, Trash2, Tags, Plus, Edit2, MessageCircle } from 'lucide-react';
+import { Settings as SettingsIcon, Key, Download, Upload, ArrowUpDown, Copy, Check, RefreshCw, GripVertical, X, History, RotateCcw, Trash2, Tags, Plus, Edit2, MessageCircle, Database } from 'lucide-react';
 
 export default function Settings() {
     const [activeTab, setActiveTab] = useState('api');
@@ -18,6 +18,7 @@ export default function Settings() {
                     <TabButton active={activeTab === 'whatsapp'} onClick={() => setActiveTab('whatsapp')} icon={<MessageCircle size={16} />} label="WhatsApp" />
                     <TabButton active={activeTab === 'status'} onClick={() => setActiveTab('status')} icon={<Tags size={16} />} label="Status" />
                     <TabButton active={activeTab === 'order'} onClick={() => setActiveTab('order')} icon={<ArrowUpDown size={16} />} label="Ordem" />
+                    <TabButton active={activeTab === 'backup'} onClick={() => setActiveTab('backup')} icon={<Database size={16} />} label="Backup" />
                     <TabButton active={activeTab === 'export'} onClick={() => setActiveTab('export')} icon={<Download size={16} />} label="Exportar" />
                     <TabButton active={activeTab === 'import'} onClick={() => setActiveTab('import')} icon={<Upload size={16} />} label="Importar" />
                     <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<History size={16} />} label="Histórico" />
@@ -28,6 +29,7 @@ export default function Settings() {
             {activeTab === 'whatsapp' && <WhatsAppSettings />}
             {activeTab === 'status' && <StatusSettings />}
             {activeTab === 'order' && <DistributionOrder />}
+            {activeTab === 'backup' && <BackupSettings />}
             {activeTab === 'export' && <ExportLeads />}
             {activeTab === 'import' && <ImportLeads />}
             {activeTab === 'history' && <ImportHistory />}
@@ -428,6 +430,190 @@ function DistributionOrder() {
 }
 
 // ==============================
+// BACKUP SETTINGS TAB
+// ==============================
+function BackupSettings() {
+    const [loading, setLoading] = useState(false);
+    const [restoring, setRestoring] = useState(false);
+    const [backupFile, setBackupFile] = useState(null);
+    const [previewData, setPreviewData] = useState(null);
+
+    // Fazer backup completo
+    const handleBackup = async () => {
+        setLoading(true);
+        try {
+            // Buscar todos os leads com todos os dados
+            const data = await api.exportLeads({ format: 'json' });
+            const leads = data.leads || [];
+
+            // Criar objeto de backup com metadados
+            const backup = {
+                version: '1.0',
+                created_at: new Date().toISOString(),
+                total_leads: leads.length,
+                leads: leads
+            };
+
+            // Download
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `backup_crm_${date}_${leads.length}leads.json`;
+            a.click();
+
+            alert(`✅ Backup realizado com sucesso!\n\n📊 ${leads.length} leads salvos.`);
+        } catch (err) {
+            alert('Erro ao fazer backup: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Ler arquivo de backup
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (!data.leads || !Array.isArray(data.leads)) {
+                    alert('Arquivo de backup inválido');
+                    return;
+                }
+                setBackupFile(data);
+                setPreviewData({
+                    created_at: data.created_at,
+                    total_leads: data.total_leads || data.leads.length,
+                    sample: data.leads.slice(0, 5)
+                });
+            } catch (err) {
+                alert('Erro ao ler arquivo: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    // Restaurar backup
+    const handleRestore = async () => {
+        if (!backupFile || !backupFile.leads) {
+            alert('Nenhum arquivo de backup carregado');
+            return;
+        }
+
+        if (!confirm(`⚠️ ATENÇÃO!\n\nIsso vai ATUALIZAR os leads existentes com os dados do backup.\n\nDeseja continuar com a restauração de ${backupFile.leads.length} leads?`)) {
+            return;
+        }
+
+        setRestoring(true);
+        try {
+            // Enviar leads para restauração
+            const result = await api.restoreBackup({ leads: backupFile.leads });
+            alert(`✅ Restauração concluída!\n\n📊 ${result.restored || 0} leads restaurados\n📝 ${result.skipped || 0} leads ignorados`);
+            setBackupFile(null);
+            setPreviewData(null);
+        } catch (err) {
+            alert('Erro ao restaurar: ' + err.message);
+        } finally {
+            setRestoring(false);
+        }
+    };
+
+    return (
+        <div className="card">
+            <h3 style={{ marginBottom: 24 }}><Database size={20} style={{ marginRight: 8 }} /> Backup de Dados</h3>
+
+            {/* Fazer Backup */}
+            <div style={{
+                padding: 20,
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05))',
+                borderRadius: 12,
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                marginBottom: 24
+            }}>
+                <h4 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Download size={18} /> Fazer Backup
+                </h4>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: 16 }}>
+                    Faça um backup completo de todos os leads antes de importar novos dados.
+                    O arquivo incluirá nome, email, telefone, vendedora, status, campanha e todos os outros dados.
+                </p>
+                <button
+                    className="btn btn-primary"
+                    onClick={handleBackup}
+                    disabled={loading}
+                    style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                >
+                    {loading ? '⏳ Gerando backup...' : '📦 Baixar Backup Completo'}
+                </button>
+            </div>
+
+            {/* Restaurar Backup */}
+            <div style={{
+                padding: 20,
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.05))',
+                borderRadius: 12,
+                border: '1px solid rgba(245, 158, 11, 0.3)'
+            }}>
+                <h4 style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <RotateCcw size={18} /> Restaurar Backup
+                </h4>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: 16 }}>
+                    Restaure um backup anterior para recuperar dados perdidos.
+                    ⚠️ Leads existentes serão atualizados com os dados do backup.
+                </p>
+
+                <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleFileChange}
+                    style={{ marginBottom: 16 }}
+                />
+
+                {previewData && (
+                    <div style={{
+                        background: 'var(--bg-primary)',
+                        padding: 16,
+                        borderRadius: 8,
+                        marginBottom: 16
+                    }}>
+                        <strong>📋 Preview do Backup:</strong>
+                        <div style={{ marginTop: 8, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            <div>📅 Criado em: {new Date(previewData.created_at).toLocaleString('pt-BR')}</div>
+                            <div>📊 Total de leads: {previewData.total_leads}</div>
+                            <div style={{ marginTop: 8 }}>
+                                <strong>Amostra (5 primeiros):</strong>
+                                <ul style={{ marginTop: 4, paddingLeft: 20 }}>
+                                    {previewData.sample.map((lead, i) => (
+                                        <li key={i}>{lead.nome || lead.first_name || 'Sem nome'} - {lead.vendedora || lead.seller_name || 'Sem vendedora'}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <button
+                    className="btn btn-warning"
+                    onClick={handleRestore}
+                    disabled={restoring || !backupFile}
+                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white' }}
+                >
+                    {restoring ? '⏳ Restaurando...' : '🔄 Restaurar Backup'}
+                </button>
+            </div>
+
+            <p style={{ marginTop: 16, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                💡 <strong>Dica:</strong> Sempre faça um backup ANTES de importar novos contatos para evitar perda de dados.
+            </p>
+        </div>
+    );
+}
+
+// ==============================
 // EXPORT LEADS TAB
 // ==============================
 function ExportLeads() {
@@ -663,11 +849,13 @@ function ImportLeads() {
     const [sellers, setSellers] = useState([]);
     const [campaigns, setCampaigns] = useState([]);
     const [subcampaigns, setSubcampaigns] = useState([]);
+    const [statuses, setStatuses] = useState([]);
     const [fileData, setFileData] = useState('');
     const [fileName, setFileName] = useState('');
     const [selectedSeller, setSelectedSeller] = useState('');
     const [selectedCampaign, setSelectedCampaign] = useState('');
     const [selectedSubcampaign, setSelectedSubcampaign] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('');
     const [distribute, setDistribute] = useState(false);
     const [inGroup, setInGroup] = useState(true);
     const [preserveInGroup, setPreserveInGroup] = useState(false);
@@ -680,12 +868,13 @@ function ImportLeads() {
     const [showMapping, setShowMapping] = useState(false);
     const [parsedData, setParsedData] = useState([]);
     const [columns, setColumns] = useState([]);
-    const [mapping, setMapping] = useState({ nome: '', email: '', telefone: '', produto: '' });
+    const [mapping, setMapping] = useState({ nome: '', email: '', telefone: '', produto: '', status: '' });
 
     useEffect(() => {
         api.getSellers().then(d => setSellers(d.sellers));
         api.getCampaigns({ active_only: true }).then(d => setCampaigns(d.campaigns));
         api.getSubcampaigns({ active_only: true }).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
+        api.getAllStatuses().then(d => setStatuses(d.statuses || [])).catch(() => { });
     }, []);
 
     const handleFileUpload = (e) => {
@@ -766,7 +955,8 @@ function ImportLeads() {
                 nome: mapping.nome ? row[mapping.nome] : '',
                 email: mapping.email ? row[mapping.email] : '',
                 telefone: mapping.telefone ? row[mapping.telefone] : '',
-                produto: mapping.produto ? row[mapping.produto] : ''
+                produto: mapping.produto ? row[mapping.produto] : '',
+                status_name: mapping.status ? row[mapping.status] : ''
             }));
 
             let data = {
@@ -779,6 +969,7 @@ function ImportLeads() {
             if (selectedSeller && !distribute) data.seller_id = parseInt(selectedSeller);
             if (selectedCampaign) data.campaign_id = parseInt(selectedCampaign);
             if (selectedSubcampaign) data.subcampaign_id = parseInt(selectedSubcampaign);
+            if (selectedStatus) data.status_id = parseInt(selectedStatus);
 
             const res = await api.importLeads(data);
             setToast({ type: 'success', imported: res.imported, updated: res.updated || 0, skipped: res.skipped, total: res.total });
@@ -826,7 +1017,7 @@ function ImportLeads() {
                 />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="form-group">
                     <label className="form-label">Campanha / Lançamento</label>
                     <select className="form-select" value={selectedCampaign} onChange={e => { setSelectedCampaign(e.target.value); setSelectedSubcampaign(''); }}>
@@ -863,6 +1054,27 @@ function ImportLeads() {
                         <option value="">Não atribuir</option>
                         {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                </div>
+
+                <div className="form-group">
+                    <label className="form-label">Status inicial</label>
+                    <select
+                        className="form-select"
+                        value={selectedStatus}
+                        onChange={e => setSelectedStatus(e.target.value)}
+                    >
+                        <option value="">Sem status</option>
+                        {statuses.map(s => (
+                            <option key={s.id} value={s.id} style={{ color: s.color }}>
+                                {s.name}
+                            </option>
+                        ))}
+                    </select>
+                    {selectedStatus && (
+                        <div style={{ marginTop: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            Todos os leads importados terão este status
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -941,6 +1153,16 @@ function ImportLeads() {
                                     {columns.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label">🏷️ Coluna do STATUS</label>
+                                <select className="form-select" value={mapping.status} onChange={e => setMapping({ ...mapping, status: e.target.value })}>
+                                    <option value="">-- Não importar --</option>
+                                    {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <small style={{ color: 'var(--text-secondary)', marginTop: 4, display: 'block' }}>
+                                    Use nomes como: Novo, Onboarding, Respondeu, etc.
+                                </small>
+                            </div>
                         </div>
 
                         {/* Preview */}
@@ -954,6 +1176,7 @@ function ImportLeads() {
                                             <th style={{ color: '#6366f1' }}>Email</th>
                                             <th style={{ color: '#6366f1' }}>Telefone</th>
                                             <th style={{ color: '#6366f1' }}>Produto</th>
+                                            <th style={{ color: '#6366f1' }}>Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -963,6 +1186,7 @@ function ImportLeads() {
                                                 <td>{mapping.email ? row[mapping.email] : '-'}</td>
                                                 <td>{mapping.telefone ? row[mapping.telefone] : '-'}</td>
                                                 <td>{mapping.produto ? row[mapping.produto] : '-'}</td>
+                                                <td>{mapping.status ? row[mapping.status] : '-'}</td>
                                             </tr>
                                         ))}
                                     </tbody>

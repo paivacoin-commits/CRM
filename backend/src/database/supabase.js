@@ -53,6 +53,17 @@ export const db = {
         return data;
     },
 
+    async getUserByName(name) {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('name', name)
+            .eq('is_active', true)
+            .single();
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
     async getUsers() {
         const { data, error } = await supabase
             .from('users')

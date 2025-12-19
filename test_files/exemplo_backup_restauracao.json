@@ -1,0 +1,47 @@
+{
+    "version": "1.0",
+    "created_at": "2025-12-18T12:00:00.000Z",
+    "total_leads": 5,
+    "leads": [
+        {
+            "nome": "Maria Silva",
+            "email": "maria.silva@email.com",
+            "telefone": "5511999990001",
+            "produto": "Curso Digital Marketing",
+            "vendedora": "Vendedora 1",
+            "status": "Novo"
+        },
+        {
+            "nome": "João Santos",
+            "email": "joao.santos@email.com",
+            "telefone": "5511999990002",
+            "produto": "Curso Python Avançado",
+            "vendedora": "Vendedora 2",
+            "status": "Respondeu"
+        },
+        {
+            "nome": "Ana Oliveira",
+            "email": "ana.oliveira@email.com",
+            "telefone": "5511999990003",
+            "produto": "Mentoria de Vendas",
+            "vendedora": "Vendedora 1",
+            "status": "Interessado"
+        },
+        {
+            "nome": "Pedro Costa",
+            "email": "pedro.costa@email.com",
+            "telefone": "5511999990004",
+            "produto": "Curso Excel Avançado",
+            "vendedora": "Vendedora 2",
+            "status": "Novo"
+        },
+        {
+            "nome": "Carla Souza",
+            "email": "carla.souza@email.com",
+            "telefone": "5511999990005",
+            "produto": "Ebook Finanças",
+            "vendedora": "Vendedora 1",
+            "status": "Fechou"
+        }
+    ]
+}

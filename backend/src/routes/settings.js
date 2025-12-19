@@ -183,6 +183,88 @@ router.get('/export/leads', async (req, res) => {
 });
 
 // ============================================
+// RESTAURAR BACKUP
+// ============================================
+
+/**
+ * POST /api/settings/restore-backup
+ * Restaura leads a partir de um arquivo de backup
+ */
+router.post('/restore-backup', async (req, res) => {
+    console.log('🔄 Restore backup request received');
+    try {
+        const { leads } = req.body;
+
+        if (!Array.isArray(leads) || leads.length === 0) {
+            return res.status(400).json({ error: 'Nenhum lead para restaurar' });
+        }
+
+        let restored = 0;
+        let skipped = 0;
+
+        for (const lead of leads) {
+            try {
+                const leadEmail = (lead.email || '').trim().toLowerCase();
+                const leadPhone = (lead.telefone || lead.phone || '').replace(/\D/g, '');
+
+                // Buscar lead existente
+                let existing = null;
+
+                if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
+                    existing = await db.getLeadByEmail(leadEmail);
+                }
+
+                if (!existing && leadPhone && leadPhone.length >= 10) {
+                    const phoneEnd = leadPhone.slice(-8);
+                    existing = await db.getLeadByPhone(phoneEnd);
+                }
+
+                if (existing) {
+                    // Buscar seller_id pelo nome da vendedora
+                    let sellerId = existing.seller_id;
+                    if (lead.vendedora || lead.seller_name) {
+                        const sellerName = lead.vendedora || lead.seller_name;
+                        const seller = await db.getUserByName(sellerName);
+                        if (seller) {
+                            sellerId = seller.id;
+                        }
+                    }
+
+                    // Atualizar lead com dados do backup
+                    const updateData = {
+                        first_name: lead.nome || lead.first_name || existing.first_name,
+                        email: leadEmail || existing.email,
+                        phone: leadPhone || existing.phone,
+                        product_name: lead.produto || lead.product_name || existing.product_name,
+                        seller_id: sellerId
+                    };
+
+                    await db.updateLeadById(existing.id, updateData);
+                    restored++;
+                    console.log(`✅ Lead restaurado: ${updateData.first_name} -> vendedora ${sellerId}`);
+                } else {
+                    skipped++;
+                }
+            } catch (err) {
+                console.error('❌ Erro ao restaurar lead:', err.message);
+                skipped++;
+            }
+        }
+
+        console.log(`🔄 Restauração concluída: ${restored} restaurados, ${skipped} ignorados`);
+        res.json({
+            message: 'Restauração concluída',
+            restored,
+            skipped,
+            total: leads.length
+        });
+    } catch (error) {
+        console.error('Error restoring backup:', error);
+        res.status(500).json({ error: 'Erro ao restaurar backup' });
+    }
+});
+
+// ============================================
 // IMPORTAR CONTATOS
 // ============================================
 
@@ -199,13 +281,14 @@ router.post('/import/leads', async (req, res) => {
             distribute = false,
             campaign_id = null,
             subcampaign_id = null,
+            status_id = null,
             in_group = true,
             preserve_in_group = false,
             update_existing = true,
             batch_name = null
         } = req.body;
 
-        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id, subcampaign_id });
+        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id, subcampaign_id, status_id });
 
         let leadsToImport = [];
 
@@ -249,14 +332,30 @@ router.post('/import/leads', async (req, res) => {
         const defaultStatusId = defaultStatus?.id || 1;
         console.log(`📌 Status padrão para novos leads: id=${defaultStatusId}`);
 
+        // Buscar todos os status para mapear por nome
+        const allStatuses = await db.getStatuses();
+        const statusMap = {};
+        allStatuses.forEach(s => {
+            statusMap[s.name.toLowerCase().trim()] = s.id;
+        });
+        console.log(`📌 Status disponíveis: ${Object.keys(statusMap).join(', ')}`);
+
         for (const lead of leadsToImport) {
             try {
                 const leadEmail = (lead.email || lead.Email || '').trim().toLowerCase();
                 const leadPhone = (lead.telefone || lead.phone || lead.phone_number || lead.Telefone || lead.WhatsApp || lead.whatsapp || '').replace(/\D/g, '');
                 const leadNome = lead.nome || lead.first_name || lead.name || lead.Nome || '';
                 const leadProduto = lead.produto || lead.product_name || lead.product || lead.Produto || '';
+                const leadStatusName = (lead.status_name || lead.status || lead.Status || '').trim().toLowerCase();
 
-                console.log(`📋 Processando lead: nome="${leadNome}", email="${leadEmail}", phone="${leadPhone}"`);
+                // Buscar status_id pelo nome
+                let leadStatusId = status_id || null;
+                if (leadStatusName && statusMap[leadStatusName]) {
+                    leadStatusId = statusMap[leadStatusName];
+                    console.log(`   ↳ Status do CSV: "${leadStatusName}" -> id=${leadStatusId}`);
+                }
+
+                console.log(`📋 Processando lead: nome="${leadNome}", email="${leadEmail}", phone="${leadPhone}", status="${leadStatusName}"`);
 
                 // Verificar se já existe - SIMPLIFICADO
                 let existing = null;
@@ -275,14 +374,16 @@ router.post('/import/leads', async (req, res) => {
                 if (existing) {
                     console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}`);
                     if (update_existing) {
-                        // Determinar vendedora para atualização
-                        let updateSellerId = seller_id || null;
-                        if (distribute && sellers.length > 0) {
-                            updateSellerId = sellers[sellerIndex % sellers.length].id;
-                            sellerIndex++;
+                        // IMPORTANTE: NÃO trocar a vendedora de leads existentes!
+                        // Apenas atualizar dados, manter a vendedora original
+                        // Se seller_id foi especificado explicitamente (sem distribuição), usar ele
+                        // Se distribute está on, NÃO mudar - manter vendedora atual do lead
+                        let updateSellerId = existing.seller_id; // Manter vendedora atual por padrão
+
+                        // Só muda vendedora se foi especificado explicitamente E distribute está OFF
+                        if (seller_id && !distribute) {
+                            updateSellerId = seller_id;
                         }
-
-
 
                         // Se está adicionando subcampanha, salvar status e checking antigos e limpar
                         // Só atualiza campos se vieram preenchidos na importação
@@ -294,7 +395,7 @@ router.post('/import/leads', async (req, res) => {
                             in_group: preserve_in_group ? existing.in_group : in_group,
                             campaign_id: campaign_id || existing.campaign_id,
                             subcampaign_id: subcampaign_id || existing.subcampaign_id,
-                            seller_id: updateSellerId || existing.seller_id
+                            seller_id: updateSellerId // Mantém vendedora atual (ou muda só se explicitamente definido)
                         };
 
                         // Se selecionou subcampanha, salvar valores antigos (se existem) e limpar
@@ -336,7 +437,7 @@ router.post('/import/leads', async (req, res) => {
                     phone: leadPhone,
                     product_name: leadProduto,
                     seller_id: assignedSellerId,
-                    status_id: null,
+                    status_id: leadStatusId || null,
                     source: 'import',
                     campaign_id,
                     subcampaign_id,

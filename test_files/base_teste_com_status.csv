@@ -1,0 +1,15 @@
+nome;email;telefone;produto;status
+Lead Onboarding 01;onboard01@teste.com;5511800000001;Curso Digital;Onboarding
+Lead Onboarding 02;onboard02@teste.com;5511800000002;Curso Digital;Onboarding
+Lead Onboarding 03;onboard03@teste.com;5511800000003;Curso Digital;Onboarding
+Lead Onboarding 04;onboard04@teste.com;5511800000004;Mentoria Premium;Onboarding
+Lead Em Contato 01;contato01@teste.com;5511800000005;Mentoria Premium;Em contato
+Lead Em Contato 02;contato02@teste.com;5511800000006;Mentoria Premium;Em contato
+Lead Em Contato 03;contato03@teste.com;5511800000007;Ebook Vendas;Em contato
+Lead Em Contato 04;contato04@teste.com;5511800000008;Ebook Vendas;Em contato
+Lead Numero Errado 01;nerrado01@teste.com;5511800000009;Curso Avançado;Número errado
+Lead Numero Errado 02;nerrado02@teste.com;5511800000010;Curso Avançado;Número errado
+Lead Numero Errado 03;nerrado03@teste.com;5511800000011;Programa VIP;Número errado
+Lead Sem Status 01;semstatus01@teste.com;5511800000012;Curso Teste;
+Lead Sem Status 02;semstatus02@teste.com;5511800000013;Curso Teste;
+Lead Sem Status 03;semstatus03@teste.com;5511800000014;Curso Teste;

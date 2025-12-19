@@ -79,4 +79,6 @@ export const api = {
     createSchedule: (data) => request('/schedules', { method: 'POST', body: JSON.stringify(data) }),
     updateSchedule: (uuid, data) => request(`/schedules/${uuid}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSchedule: (uuid) => request(`/schedules/${uuid}`, { method: 'DELETE' }),
+    // Backup
+    restoreBackup: (data) => request('/settings/restore-backup', { method: 'POST', body: JSON.stringify(data) }),
 };
