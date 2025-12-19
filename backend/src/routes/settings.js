@@ -273,9 +273,9 @@ router.post('/restore-backup', async (req, res) => {
                     seller_id: sellerId,
                     status_id: lead.status_id || null,
                     in_group: lead.in_group !== undefined ? lead.in_group : true,
-                    checking: lead.checking === true,
                     campaign_id: lead.campaign_id || null,
                     subcampaign_id: lead.subcampaign_id || null,
+                    observations: lead.observacoes || null,
                     source: 'restore'
                 };
 
