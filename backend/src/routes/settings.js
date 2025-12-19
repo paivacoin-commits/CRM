@@ -141,15 +141,29 @@ router.get('/export/leads', async (req, res) => {
         const { leads } = await db.getLeads(filters);
 
         const exportData = leads.map(l => ({
+            // Dados básicos
             nome: l.first_name,
             email: l.email,
             telefone: l.phone,
             produto: l.product_name,
-            campanha: l.campaign_name,
-            data_entrada: l.created_at,
-            status: l.status_name,
+            // Relacionamentos
             vendedora: l.seller_name,
-            observacoes: l.observations
+            seller_id: l.seller_id,
+            campanha: l.campaign_name,
+            campaign_id: l.campaign_id,
+            subcampaign_id: l.subcampaign_id,
+            // Status e controles
+            status: l.status_name,
+            status_id: l.status_id,
+            in_group: l.in_group,
+            checking: l.checking,
+            // Observações e datas
+            observacoes: l.observations,
+            notes: l.notes,
+            data_entrada: l.created_at,
+            updated_at: l.updated_at,
+            // IDs para referência
+            uuid: l.uuid
         }));
 
         if (format === 'csv') {
@@ -233,32 +247,43 @@ router.post('/restore-backup', async (req, res) => {
                 }
 
                 if (existing) {
-                    // Atualizar lead existente
+                    // Atualizar lead existente com TODOS os dados do backup
                     const updateData = {
                         first_name: leadNome,
                         email: leadEmail || existing.email,
                         phone: leadPhone || existing.phone,
                         product_name: leadProduto || existing.product_name,
-                        seller_id: sellerId || existing.seller_id
+                        seller_id: sellerId || lead.seller_id || existing.seller_id,
+                        status_id: lead.status_id || existing.status_id,
+                        in_group: lead.in_group !== undefined ? lead.in_group : existing.in_group,
+                        checking: lead.checking !== undefined ? lead.checking : existing.checking,
+                        campaign_id: lead.campaign_id || existing.campaign_id,
+                        subcampaign_id: lead.subcampaign_id || existing.subcampaign_id,
+                        notes: lead.notes || lead.observacoes || existing.notes
                     };
 
                     await db.updateLeadById(existing.id, updateData);
                     restored++;
-                    console.log(`✅ Lead atualizado: ${updateData.first_name} -> vendedora ${sellerId}`);
+                    console.log(`✅ Lead atualizado: ${updateData.first_name} -> vendedora ${sellerId}, status_id=${updateData.status_id}`);
                 } else {
-                    // CRIAR lead novo (não existe mais na base)
+                    // CRIAR lead novo com TODOS os dados do backup
                     const newLead = await db.createLead({
-                        uuid: uuidv4(),
+                        uuid: lead.uuid || uuidv4(),
                         first_name: leadNome,
                         email: leadEmail,
                         phone: leadPhone,
                         product_name: leadProduto,
-                        seller_id: sellerId,
-                        status_id: null,
+                        seller_id: sellerId || lead.seller_id,
+                        status_id: lead.status_id || null,
+                        in_group: lead.in_group !== undefined ? lead.in_group : true,
+                        checking: lead.checking || false,
+                        campaign_id: lead.campaign_id || null,
+                        subcampaign_id: lead.subcampaign_id || null,
+                        notes: lead.notes || lead.observacoes || null,
                         source: 'restore'
                     });
                     created++;
-                    console.log(`🆕 Lead criado: ${leadNome} -> vendedora ${sellerId}`);
+                    console.log(`🆕 Lead criado: ${leadNome} -> vendedora ${sellerId}, status_id=${lead.status_id}`);
                 }
             } catch (err) {
                 console.error('❌ Erro ao restaurar lead:', err.message);
