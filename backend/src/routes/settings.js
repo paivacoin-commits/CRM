@@ -295,6 +295,7 @@ router.post('/restore-backup', async (req, res) => {
                         checking: lead.checking === true,
                         campaign_id: lead.campaign_id || null,
                         subcampaign_id: lead.subcampaign_id || null,
+                        notes: lead.notes || lead.observacoes || null,
                         source: 'restore'
                     };
 
