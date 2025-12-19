@@ -200,12 +200,25 @@ router.post('/restore-backup', async (req, res) => {
         }
 
         let restored = 0;
+        let created = 0;
         let skipped = 0;
 
         for (const lead of leads) {
             try {
                 const leadEmail = (lead.email || '').trim().toLowerCase();
                 const leadPhone = (lead.telefone || lead.phone || '').replace(/\D/g, '');
+                const leadNome = lead.nome || lead.first_name || 'Sem nome';
+                const leadProduto = lead.produto || lead.product_name || '';
+
+                // Buscar seller_id pelo nome da vendedora
+                let sellerId = null;
+                if (lead.vendedora || lead.seller_name) {
+                    const sellerName = lead.vendedora || lead.seller_name;
+                    const seller = await db.getUserByName(sellerName);
+                    if (seller) {
+                        sellerId = seller.id;
+                    }
+                }
 
                 // Buscar lead existente
                 let existing = null;
@@ -220,30 +233,32 @@ router.post('/restore-backup', async (req, res) => {
                 }
 
                 if (existing) {
-                    // Buscar seller_id pelo nome da vendedora
-                    let sellerId = existing.seller_id;
-                    if (lead.vendedora || lead.seller_name) {
-                        const sellerName = lead.vendedora || lead.seller_name;
-                        const seller = await db.getUserByName(sellerName);
-                        if (seller) {
-                            sellerId = seller.id;
-                        }
-                    }
-
-                    // Atualizar lead com dados do backup
+                    // Atualizar lead existente
                     const updateData = {
-                        first_name: lead.nome || lead.first_name || existing.first_name,
+                        first_name: leadNome,
                         email: leadEmail || existing.email,
                         phone: leadPhone || existing.phone,
-                        product_name: lead.produto || lead.product_name || existing.product_name,
-                        seller_id: sellerId
+                        product_name: leadProduto || existing.product_name,
+                        seller_id: sellerId || existing.seller_id
                     };
 
                     await db.updateLeadById(existing.id, updateData);
                     restored++;
-                    console.log(`✅ Lead restaurado: ${updateData.first_name} -> vendedora ${sellerId}`);
+                    console.log(`✅ Lead atualizado: ${updateData.first_name} -> vendedora ${sellerId}`);
                 } else {
-                    skipped++;
+                    // CRIAR lead novo (não existe mais na base)
+                    const newLead = await db.createLead({
+                        uuid: uuidv4(),
+                        first_name: leadNome,
+                        email: leadEmail,
+                        phone: leadPhone,
+                        product_name: leadProduto,
+                        seller_id: sellerId,
+                        status_id: null,
+                        source: 'restore'
+                    });
+                    created++;
+                    console.log(`🆕 Lead criado: ${leadNome} -> vendedora ${sellerId}`);
                 }
             } catch (err) {
                 console.error('❌ Erro ao restaurar lead:', err.message);
@@ -251,10 +266,11 @@ router.post('/restore-backup', async (req, res) => {
             }
         }
 
-        console.log(`🔄 Restauração concluída: ${restored} restaurados, ${skipped} ignorados`);
+        console.log(`🔄 Restauração concluída: ${restored} atualizados, ${created} criados, ${skipped} ignorados`);
         res.json({
             message: 'Restauração concluída',
             restored,
+            created,
             skipped,
             total: leads.length
         });
