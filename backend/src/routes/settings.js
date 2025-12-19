@@ -140,6 +140,19 @@ router.get('/export/leads', async (req, res) => {
 
         const { leads } = await db.getLeads(filters);
 
+        // Buscar todos os agendamentos
+        const allSchedules = await db.getSchedules({ limit: 10000 });
+        const schedulesByLead = {};
+        allSchedules.forEach(s => {
+            if (!schedulesByLead[s.lead_id]) schedulesByLead[s.lead_id] = [];
+            schedulesByLead[s.lead_id].push({
+                scheduled_at: s.scheduled_at,
+                notes: s.notes,
+                status: s.status,
+                type: s.type
+            });
+        });
+
         const exportData = leads.map(l => ({
             // Dados básicos
             nome: l.first_name,
@@ -163,7 +176,10 @@ router.get('/export/leads', async (req, res) => {
             data_entrada: l.created_at,
             updated_at: l.updated_at,
             // IDs para referência
-            uuid: l.uuid
+            uuid: l.uuid,
+            id: l.id,
+            // Agendamentos (ações)
+            agendamentos: schedulesByLead[l.id] || []
         }));
 
         if (format === 'csv') {
@@ -286,6 +302,26 @@ router.post('/restore-backup', async (req, res) => {
                     const newLead = await db.createLead(createData);
                     created++;
                     console.log(`🆕 Lead criado: ${leadNome}`);
+
+                    // Restaurar agendamentos do lead
+                    if (lead.agendamentos && Array.isArray(lead.agendamentos) && lead.agendamentos.length > 0) {
+                        for (const agend of lead.agendamentos) {
+                            try {
+                                await db.createSchedule({
+                                    uuid: uuidv4(),
+                                    lead_id: newLead.id,
+                                    seller_id: sellerId || lead.seller_id || null,
+                                    scheduled_at: agend.scheduled_at,
+                                    notes: agend.notes || null,
+                                    status: agend.status || 'pending',
+                                    type: agend.type || 'contact'
+                                });
+                                console.log(`   📅 Agendamento restaurado: ${agend.scheduled_at}`);
+                            } catch (schedErr) {
+                                console.error('   ❌ Erro ao restaurar agendamento:', schedErr.message);
+                            }
+                        }
+                    }
                 }
             } catch (err) {
                 console.error('❌ Erro ao restaurar lead:', err.message, err);
