@@ -240,93 +240,50 @@ router.post('/restore-backup', async (req, res) => {
                 const leadNome = lead.nome || lead.first_name || 'Sem nome';
                 const leadProduto = lead.produto || lead.product_name || '';
 
-                // Buscar seller_id pelo nome da vendedora
-                let sellerId = null;
-                if (lead.vendedora || lead.seller_name) {
-                    const sellerName = lead.vendedora || lead.seller_name;
-                    const seller = await db.getUserByName(sellerName);
-                    if (seller) {
-                        sellerId = seller.id;
-                    }
-                }
+                // Usar seller_id diretamente do backup
+                const sellerId = lead.seller_id || null;
 
-                // Buscar lead existente
-                let existing = null;
+                // SEMPRE criar lead (não buscar existente para evitar conflitos)
+                const createData = {
+                    uuid: uuidv4(),
+                    first_name: leadNome,
+                    email: leadEmail || null,
+                    phone: leadPhone || null,
+                    product_name: leadProduto || null,
+                    seller_id: sellerId,
+                    status_id: lead.status_id || null,
+                    in_group: lead.in_group !== undefined ? lead.in_group : true,
+                    checking: lead.checking === true,
+                    campaign_id: lead.campaign_id || null,
+                    subcampaign_id: lead.subcampaign_id || null,
+                    notes: lead.notes || lead.observacoes || null,
+                    source: 'restore'
+                };
 
-                if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
-                    existing = await db.getLeadByEmail(leadEmail);
-                }
+                console.log('📝 Criando lead:', leadNome);
+                const newLead = await db.createLead(createData);
+                created++;
 
-                if (!existing && leadPhone && leadPhone.length >= 10) {
-                    const phoneEnd = leadPhone.slice(-8);
-                    existing = await db.getLeadByPhone(phoneEnd);
-                }
-
-                if (existing) {
-                    // Atualizar lead existente com TODOS os dados do backup
-                    const updateData = {
-                        first_name: leadNome,
-                        email: leadEmail || existing.email,
-                        phone: leadPhone || existing.phone,
-                        product_name: leadProduto || existing.product_name,
-                        seller_id: sellerId || lead.seller_id || existing.seller_id,
-                        status_id: lead.status_id || existing.status_id,
-                        in_group: lead.in_group !== undefined ? lead.in_group : existing.in_group,
-                        checking: lead.checking !== undefined ? lead.checking : existing.checking,
-                        campaign_id: lead.campaign_id || existing.campaign_id,
-                        subcampaign_id: lead.subcampaign_id || existing.subcampaign_id,
-                        notes: lead.notes || lead.observacoes || existing.notes
-                    };
-
-                    await db.updateLeadById(existing.id, updateData);
-                    restored++;
-                    console.log(`✅ Lead atualizado: ${updateData.first_name} -> vendedora ${sellerId}, status_id=${updateData.status_id}`);
-                } else {
-                    // CRIAR lead novo com dados do backup
-                    const createData = {
-                        uuid: uuidv4(), // Sempre novo UUID para evitar conflitos
-                        first_name: leadNome,
-                        email: leadEmail || null,
-                        phone: leadPhone || null,
-                        product_name: leadProduto || null,
-                        seller_id: sellerId || lead.seller_id || null,
-                        status_id: lead.status_id || null,
-                        in_group: lead.in_group !== undefined ? lead.in_group : true,
-                        checking: lead.checking === true,
-                        campaign_id: lead.campaign_id || null,
-                        subcampaign_id: lead.subcampaign_id || null,
-                        notes: lead.notes || lead.observacoes || null,
-                        source: 'restore'
-                    };
-
-                    console.log('📝 Criando lead:', JSON.stringify(createData));
-                    const newLead = await db.createLead(createData);
-                    created++;
-                    console.log(`🆕 Lead criado: ${leadNome}`);
-
-                    // Restaurar agendamentos do lead
-                    if (lead.agendamentos && Array.isArray(lead.agendamentos) && lead.agendamentos.length > 0) {
-                        for (const agend of lead.agendamentos) {
-                            try {
-                                await db.createSchedule({
-                                    uuid: uuidv4(),
-                                    lead_id: newLead.id,
-                                    seller_id: sellerId || lead.seller_id || null,
-                                    scheduled_at: agend.scheduled_at,
-                                    notes: agend.notes || null,
-                                    status: agend.status || 'pending',
-                                    type: agend.type || 'contact'
-                                });
-                                console.log(`   📅 Agendamento restaurado: ${agend.scheduled_at}`);
-                            } catch (schedErr) {
-                                console.error('   ❌ Erro ao restaurar agendamento:', schedErr.message);
-                            }
+                // Restaurar agendamentos do lead
+                if (lead.agendamentos && Array.isArray(lead.agendamentos) && lead.agendamentos.length > 0) {
+                    for (const agend of lead.agendamentos) {
+                        try {
+                            await db.createSchedule({
+                                uuid: uuidv4(),
+                                lead_id: newLead.id,
+                                seller_id: sellerId,
+                                scheduled_at: agend.scheduled_at,
+                                notes: agend.notes || null,
+                                status: agend.status || 'pending',
+                                type: agend.type || 'contact'
+                            });
+                        } catch (schedErr) {
+                            console.error('   ❌ Erro agendamento:', schedErr.message);
                         }
                     }
                 }
             } catch (err) {
-                console.error('❌ Erro ao restaurar lead:', err.message, err);
-                console.error('   Lead data:', JSON.stringify(lead).substring(0, 200));
+                console.error('❌ Erro ao restaurar lead:', err.message);
                 skipped++;
             }
         }
