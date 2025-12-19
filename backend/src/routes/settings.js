@@ -216,6 +216,27 @@ router.get('/export/leads', async (req, res) => {
 // RESTAURAR BACKUP
 // ============================================
 
+// Endpoint de teste para debug
+router.get('/test-create-lead', async (req, res) => {
+    console.log('🧪 Test create lead');
+    try {
+        const testLead = {
+            uuid: uuidv4(),
+            first_name: 'Teste Restauração',
+            email: 'teste' + Date.now() + '@teste.com',
+            phone: '11999999999',
+            source: 'test'
+        };
+        console.log('📝 Criando lead de teste:', testLead);
+        const result = await db.createLead(testLead);
+        console.log('✅ Lead criado:', result);
+        res.json({ success: true, lead: result });
+    } catch (err) {
+        console.error('❌ Erro ao criar lead de teste:', err);
+        res.status(500).json({ success: false, error: err.message, details: err });
+    }
+});
+
 /**
  * POST /api/settings/restore-backup
  * Restaura leads a partir de um arquivo de backup
