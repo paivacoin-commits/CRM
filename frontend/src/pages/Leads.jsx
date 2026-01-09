@@ -410,8 +410,8 @@ export default function Leads() {
         }
         loadLeads();
 
-        // Sincronizar status de grupo automaticamente (silencioso)
-        syncGroupStatus();
+        // Sincronização removida - agora apenas manual via botão "Sincronizar Grupo"
+        // Isso preserva as marcações manuais de in_group
     }, [loadLeads, isAdmin]);
 
     // Recarregar quando filtros ou página mudam (SEM DEBOUNCE - filtro instantâneo)

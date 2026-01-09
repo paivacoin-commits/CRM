@@ -232,10 +232,9 @@ export const db = {
             const key = `${l.id}_${l.campaign_id}`;
             let inGroupValue = campaignGroupsMap.has(key) ? campaignGroupsMap.get(key) : false;
 
-            // Se a campanha NÃO tem grupos configurados, forçar in_group = false
-            if (l.campaign_id && !campaignsWithGroups.has(l.campaign_id)) {
-                inGroupValue = false;
-            }
+            // Não forçar in_group = false para campanhas sem grupos
+            // Isso permite que marcações manuais sejam preservadas
+            // A sincronização manual via botão "Sincronizar Grupo" atualizará conforme necessário
 
             return {
                 ...l,
