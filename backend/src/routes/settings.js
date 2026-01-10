@@ -40,7 +40,8 @@ router.get('/api', async (req, res) => {
             webhook_enabled: settings.webhook_enabled,
             require_token: settings.require_token,
             round_robin_enabled: settings.round_robin_enabled,
-            greatpages_ngrok_url: settings.greatpages_ngrok_url
+            greatpages_ngrok_url: settings.greatpages_ngrok_url,
+            greatpages_default_campaign_id: settings.greatpages_default_campaign_id
         });
     } catch (error) {
         console.error('Error fetching API settings:', error);
@@ -53,15 +54,16 @@ router.get('/api', async (req, res) => {
  */
 router.patch('/api', async (req, res) => {
     try {
-        const { webhook_enabled, require_token, regenerate_token, round_robin_enabled, greatpages_ngrok_url } = req.body;
+        const { webhook_enabled, require_token, regenerate_token, round_robin_enabled, greatpages_ngrok_url, greatpages_default_campaign_id } = req.body;
 
-        console.log('📝 Updating API settings:', { webhook_enabled, require_token, round_robin_enabled, greatpages_ngrok_url });
+        console.log('📝 Updating API settings:', { webhook_enabled, require_token, round_robin_enabled, greatpages_ngrok_url, greatpages_default_campaign_id });
 
         const updateData = {};
         if (typeof webhook_enabled === 'boolean') updateData.webhook_enabled = webhook_enabled;
         if (typeof require_token === 'boolean') updateData.require_token = require_token;
         if (typeof round_robin_enabled === 'boolean') updateData.round_robin_enabled = round_robin_enabled;
         if (greatpages_ngrok_url !== undefined) updateData.greatpages_ngrok_url = greatpages_ngrok_url;
+        if (greatpages_default_campaign_id !== undefined) updateData.greatpages_default_campaign_id = greatpages_default_campaign_id;
         if (regenerate_token) updateData.webhook_token = uuidv4();
 
         console.log('📝 Update data:', updateData);

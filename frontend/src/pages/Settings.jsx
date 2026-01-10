@@ -387,6 +387,14 @@ function GreatPagesSettings() {
                     setBaseUrl(apiSettings.greatpages_ngrok_url);
                 }
 
+                // Carregar campanha padrão salva (se houver)
+                if (apiSettings.greatpages_default_campaign_id) {
+                    console.log('📥 Carregando campanha salva:', apiSettings.greatpages_default_campaign_id);
+                    setSelectedCampaign(String(apiSettings.greatpages_default_campaign_id));
+                } else {
+                    console.log('⚠️ Nenhuma campanha salva encontrada');
+                }
+
                 const campsData = await api.getCampaigns({ active_only: true });
                 setCampaigns(campsData.campaigns || []);
             } catch (e) {
@@ -586,8 +594,74 @@ function GreatPagesSettings() {
                         </option>
                     ))}
                 </select>
-                <small style={{ color: 'var(--text-secondary)' }}>
-                    Ao selecionar uma campanha, o lead será automaticamente vinculado a ela.
+                <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: 8 }}>
+                    Ao selecionar uma campanha, todos os leads recebidos do GreatPages serão vinculados a ela.
+                </small>
+            </div>
+
+            {/* BOTÃO SALVAR CONFIGURAÇÕES */}
+            <div style={{ marginBottom: 24 }}>
+                <button
+                    className="btn btn-primary"
+                    onClick={async () => {
+                        setSavingUrl(true);
+                        try {
+                            const configToSave = {
+                                greatpages_default_campaign_id: selectedCampaign ? parseInt(selectedCampaign) : null,
+                                greatpages_ngrok_url: baseUrl || null
+                            };
+
+                            console.log('💾 Salvando configurações do GreatPages:', configToSave);
+
+                            await api.updateApiSettings(configToSave);
+
+                            // Atualizar o state local para refletir o salvamento
+                            setSettings({
+                                ...settings,
+                                ...configToSave
+                            });
+
+                            console.log('✅ Configurações salvas com sucesso!');
+                            setUrlSaved(true);
+                            setTimeout(() => setUrlSaved(false), 3000);
+                        } catch (err) {
+                            console.error('❌ Erro ao salvar configurações:', err);
+                            alert('❌ Erro ao salvar configurações: ' + err.message);
+                        } finally {
+                            setSavingUrl(false);
+                        }
+                    }}
+                    disabled={savingUrl}
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '12px 24px',
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        background: urlSaved ? '#10b981' : undefined,
+                        minWidth: 200
+                    }}
+                >
+                    {urlSaved ? (
+                        <>
+                            <Check size={20} />
+                            Configurações Salvas!
+                        </>
+                    ) : savingUrl ? (
+                        <>
+                            <RefreshCw size={20} className="spinning" />
+                            Salvando...
+                        </>
+                    ) : (
+                        <>
+                            <Download size={20} />
+                            Salvar Configurações
+                        </>
+                    )}
+                </button>
+                <small style={{ display: 'block', marginTop: 8, color: 'var(--text-secondary)' }}>
+                    💡 Clique em "Salvar Configurações" para aplicar as mudanças e começar a receber leads do GreatPages.
                 </small>
             </div>
 
@@ -601,43 +675,17 @@ function GreatPagesSettings() {
                         </h4>
                     </div>
                     <p style={{ color: '#ca8a04', fontSize: '0.85rem', marginBottom: 12, lineHeight: 1.5 }}>
-                        Você está em ambiente local. Configure sua URL do ngrok abaixo e salve para não precisar digitar toda vez:
+                        Você está em ambiente local. Configure sua URL do ngrok abaixo:
                     </p>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                        <input
-                            className="form-input"
-                            style={{ borderColor: '#fde047', flex: 1 }}
-                            value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
-                            placeholder="Ex: https://0b081c480a0e.ngrok-free.app"
-                        />
-                        <button
-                            className="btn btn-primary"
-                            onClick={saveNgrokUrl}
-                            disabled={savingUrl || !baseUrl}
-                            style={{
-                                minWidth: 120,
-                                background: urlSaved ? '#10b981' : undefined,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 6
-                            }}
-                        >
-                            {urlSaved ? (
-                                <>
-                                    <Check size={16} />
-                                    Salvo!
-                                </>
-                            ) : savingUrl ? (
-                                'Salvando...'
-                            ) : (
-                                'Salvar URL'
-                            )}
-                        </button>
-                    </div>
-                    <small style={{ display: 'block', color: '#92400e', fontSize: '0.8rem' }}>
-                        💡 A URL será salva e carregada automaticamente na próxima vez que você abrir esta página.
+                    <input
+                        className="form-input"
+                        style={{ borderColor: '#fde047' }}
+                        value={baseUrl}
+                        onChange={(e) => setBaseUrl(e.target.value)}
+                        placeholder="Ex: https://0b081c480a0e.ngrok-free.app"
+                    />
+                    <small style={{ display: 'block', color: '#92400e', fontSize: '0.8rem', marginTop: 8 }}>
+                        💡 Clique em "Salvar Configurações" acima para salvar a URL do ngrok.
                     </small>
                 </div>
             )}

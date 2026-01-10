@@ -758,6 +758,7 @@ export const db = {
                     require_token: settings.require_token !== undefined ? settings.require_token : false,
                     round_robin_enabled: settings.round_robin_enabled !== undefined ? settings.round_robin_enabled : true,
                     greatpages_ngrok_url: settings.greatpages_ngrok_url || null,
+                    greatpages_default_campaign_id: settings.greatpages_default_campaign_id || null,
                     updated_at: new Date().toISOString()
                 })
                 .select()
