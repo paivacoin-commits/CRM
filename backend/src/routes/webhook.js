@@ -230,26 +230,42 @@ router.post('/greatpages', async (req, res) => {
             }
         }
 
-        // Verificar existência
+        // Verificar existência NA MESMA CAMPANHA
         let existing = null;
-        if (email) existing = await db.getLeadByEmail(email);
-        if (!existing && phone) existing = await db.getLeadByPhone(phone.slice(-8));
+        if (campaignId) {
+            // Buscar lead com mesmo email/telefone NA MESMA campanha
+            if (email) {
+                const { data, error } = await supabase
+                    .from('leads')
+                    .select('id, uuid, first_name, campaign_id')
+                    .eq('email', email.toLowerCase())
+                    .eq('campaign_id', campaignId)
+                    .single();
 
-        if (existing) {
-            console.log(`⚠️ Lead GreatPages já existe: ${existing.id}`);
-
-            // Se tem campanha configurada e o lead não está nessa campanha, atualizar
-            if (campaignId && existing.campaign_id !== campaignId) {
-                console.log(`   📝 Atualizando campanha do lead de ${existing.campaign_id} para ${campaignId}`);
-                await db.updateLeadById(existing.id, {
-                    campaign_id: campaignId
-                });
-                return res.json({ message: 'Lead atualizado para nova campanha', id: existing.uuid });
+                if (data && !error) existing = data;
             }
 
-            // Lead já existe na mesma campanha, apenas retornar
-            return res.json({ message: 'Lead já existe', id: existing.uuid });
+            if (!existing && phone) {
+                const phoneEnd = phone.slice(-8);
+                const { data, error } = await supabase
+                    .from('leads')
+                    .select('id, uuid, first_name, campaign_id')
+                    .ilike('phone', `%${phoneEnd}`)
+                    .eq('campaign_id', campaignId)
+                    .single();
+
+                if (data && !error) existing = data;
+            }
         }
+
+        if (existing) {
+            console.log(`⚠️ Lead já existe na campanha ${campaignId}: ${existing.id}`);
+            // Lead já existe na mesma campanha, apenas retornar
+            return res.json({ message: 'Lead já existe nesta campanha', id: existing.uuid });
+        }
+
+        // Lead não existe nesta campanha, pode criar (mesmo que exista em outra)
+        console.log(`   ✅ Criando novo lead na campanha ${campaignId}`);
 
         // Distribuir (Round-Robin) - SE HABILITADO
         let sellerId = null;
