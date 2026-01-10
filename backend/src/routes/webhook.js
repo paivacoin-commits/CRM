@@ -222,7 +222,17 @@ router.post('/greatpages', async (req, res) => {
 
         if (existing) {
             console.log(`⚠️ Lead GreatPages já existe: ${existing.id}`);
-            // Opcional: Atualizar dados? Por enquanto apenas logar e retornar sucesso
+
+            // Se tem campanha configurada e o lead não está nessa campanha, atualizar
+            if (campaignId && existing.campaign_id !== campaignId) {
+                console.log(`   📝 Atualizando campanha do lead de ${existing.campaign_id} para ${campaignId}`);
+                await db.updateLeadById(existing.id, {
+                    campaign_id: campaignId
+                });
+                return res.json({ message: 'Lead atualizado para nova campanha', id: existing.uuid });
+            }
+
+            // Lead já existe na mesma campanha, apenas retornar
             return res.json({ message: 'Lead já existe', id: existing.uuid });
         }
 
