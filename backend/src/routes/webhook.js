@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db, supabase } from '../database/supabase.js';
+import { normalizePhone } from '../utils/phoneNormalizer.js';
 import fs from 'fs';
 
 const router = Router();
@@ -205,24 +206,13 @@ router.post('/greatpages', async (req, res) => {
             return res.status(400).json({ error: 'Email ou telefone não encontrados no payload' });
         }
 
-        // Normalizar telefone
-        if (phone) {
-            // Remover caracteres não numéricos
-            phone = phone.replace(/\D/g, '');
+        // Normalizar telefone usando função robusta
+        phone = normalizePhone(phone);
+        console.log(`   📞 Telefone normalizado: ${phone}`);
 
-            // Adicionar DDI 55 se não tiver
-            if (phone.length === 10 || phone.length === 11) {
-                // Telefone brasileiro sem DDI (ex: 11999999999)
-                phone = '55' + phone;
-            } else if (phone.length === 12 || phone.length === 13) {
-                // Já tem DDI, verificar se é 55
-                if (!phone.startsWith('55')) {
-                    // Se não começa com 55, adicionar
-                    phone = '55' + phone;
-                }
-            }
-
-            console.log(`   📞 Telefone normalizado: ${phone}`);
+        if (!phone && !email) {
+            console.log('   ❌ Telefone inválido e sem email');
+            return res.status(400).json({ error: 'Telefone inválido e email não fornecido' });
         }
 
         // Verificar existência
