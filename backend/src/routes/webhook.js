@@ -215,6 +215,21 @@ router.post('/greatpages', async (req, res) => {
             return res.status(400).json({ error: 'Telefone inválido e email não fornecido' });
         }
 
+        // Verificar Campanha (Query Param) - ANTES de verificar lead existente
+        let campaignId = null;
+        const campaignUuid = req.query.campaign || req.query.campaign_id;
+        if (campaignUuid) {
+            try {
+                const campaign = await db.getCampaignByUuid(campaignUuid);
+                if (campaign) {
+                    campaignId = campaign.id;
+                    console.log(`   🎯 Campanha identificada: ${campaign.name} (${campaignId})`);
+                }
+            } catch (err) {
+                console.error('Erro ao buscar campanha GreatPages:', err.message);
+            }
+        }
+
         // Verificar existência
         let existing = null;
         if (email) existing = await db.getLeadByEmail(email);
@@ -254,75 +269,63 @@ router.post('/greatpages', async (req, res) => {
                 console.log(`   👤 Lead distribuído para: ${sellers[nextIndex].name}`);
             }
         } else {
-            console.log('   ⚠️ Round-Robin desabilitado - Lead criado sem vendedor');
+            console.log(`   ⚠️ Round-Robin desabilitado - Lead criado sem vendedor`);
         }
 
-        // Verificar Campanha (Query Param)
-        let campaignId = null;
-        const campaignUuid = req.query.campaign || req.query.campaign_id;
-        if (campaignUuid) {
-            try {
-                const campaign = await db.getCampaignByUuid(campaignUuid);
-                if (campaign) {
-                    campaignId = campaign.id;
-                    console.log(`   🎯 Campanha identificada: ${campaign.name} (${campaignId})`);
+        // Lógica de espelhamento de vendedora (se campanha tiver mirror_campaign_id)
+        if (campaignId) {
+            const campaign = await db.getCampaignByUuid(campaignUuid);
+            if (campaign && campaign.mirror_campaign_id) {
+                console.log(`   🪞 Campanha espelha ${campaign.mirror_campaign_id}. Buscando vendedora...`);
 
-                    // --- LÓGICA DE ESPELHAMENTO DE VENDEDORA ---
-                    if (campaign.mirror_campaign_id) {
-                        console.log(`   🪞 Campanha espelha ${campaign.mirror_campaign_id}. Buscando vendedora...`);
+                let sourceLead = null;
 
-                        let sourceLead = null;
+                // Buscar lead na campanha espelhada pelo telefone
+                if (phone && phone.length >= 8) {
+                    const phoneEnd = phone.slice(-8);
+                    console.log(`   🔍 Buscando por telefone terminando em: ${phoneEnd}`);
 
-                        // Buscar lead na campanha espelhada pelo telefone
-                        if (phone && phone.length >= 8) {
-                            const phoneEnd = phone.slice(-8);
-                            console.log(`   🔍 Buscando por telefone terminando em: ${phoneEnd}`);
+                    const { data: leads, error } = await supabase
+                        .from('leads')
+                        .select('id, first_name, seller_id, phone')
+                        .eq('campaign_id', campaign.mirror_campaign_id)
+                        .ilike('phone', `%${phoneEnd}`)
+                        .limit(1);
 
-                            const { data: leads, error } = await supabase
-                                .from('leads')
-                                .select('id, first_name, seller_id, phone')
-                                .eq('campaign_id', campaign.mirror_campaign_id)
-                                .ilike('phone', `%${phoneEnd}`)
-                                .limit(1);
-
-                            console.log(`   📊 Query result: ${leads?.length || 0} leads encontrados`);
-                            if (leads && leads.length > 0) {
-                                console.log(`   📋 Lead encontrado: ${leads[0].first_name} (ID: ${leads[0].id}, Seller: ${leads[0].seller_id})`);
-                                sourceLead = leads[0];
-                            }
-                            if (error) console.error('   ❌ Erro na busca:', error);
-                        }
-
-                        // Se não encontrou por telefone, tentar por email
-                        if (!sourceLead && email) {
-                            console.log(`   🔍 Buscando por email: ${email.toLowerCase()}`);
-                            const { data: leads, error } = await supabase
-                                .from('leads')
-                                .select('id, first_name, seller_id, email')
-                                .eq('campaign_id', campaign.mirror_campaign_id)
-                                .eq('email', email.toLowerCase())
-                                .limit(1);
-
-                            console.log(`   📊 Query result: ${leads?.length || 0} leads encontrados`);
-                            if (leads && leads.length > 0) {
-                                console.log(`   📋 Lead encontrado: ${leads[0].first_name} (ID: ${leads[0].id}, Seller: ${leads[0].seller_id})`);
-                                sourceLead = leads[0];
-                            }
-                            if (error) console.error('   ❌ Erro na busca:', error);
-                        }
-
-                        // Se encontrou e tem vendedora, usar a mesma (sobrescreve round-robin)
-                        if (sourceLead && sourceLead.seller_id) {
-                            sellerId = sourceLead.seller_id;
-                            console.log(`   ✅ Vendedora espelhada: ID ${sellerId}`);
-                        } else {
-                            console.log(`   ⚠️ Lead não encontrado na campanha de origem ou sem vendedora.`);
-                            if (sourceLead) console.log(`   ⚠️ Lead encontrado mas seller_id = ${sourceLead.seller_id}`);
-                        }
+                    console.log(`   📊 Query result: ${leads?.length || 0} leads encontrados`);
+                    if (leads && leads.length > 0) {
+                        console.log(`   📋 Lead encontrado: ${leads[0].first_name} (ID: ${leads[0].id}, Seller: ${leads[0].seller_id})`);
+                        sourceLead = leads[0];
                     }
+                    if (error) console.error('   ❌ Erro na busca:', error);
                 }
-            } catch (err) {
-                console.error('Erro ao buscar campanha GreatPages:', err.message);
+
+                // Se não encontrou por telefone, tentar por email
+                if (!sourceLead && email) {
+                    console.log(`   🔍 Buscando por email: ${email.toLowerCase()}`);
+                    const { data: leads, error } = await supabase
+                        .from('leads')
+                        .select('id, first_name, seller_id, email')
+                        .eq('campaign_id', campaign.mirror_campaign_id)
+                        .eq('email', email.toLowerCase())
+                        .limit(1);
+
+                    console.log(`   📊 Query result: ${leads?.length || 0} leads encontrados`);
+                    if (leads && leads.length > 0) {
+                        console.log(`   📋 Lead encontrado: ${leads[0].first_name} (ID: ${leads[0].id}, Seller: ${leads[0].seller_id})`);
+                        sourceLead = leads[0];
+                    }
+                    if (error) console.error('   ❌ Erro na busca:', error);
+                }
+
+                // Se encontrou e tem vendedora, usar a mesma (sobrescreve round-robin)
+                if (sourceLead && sourceLead.seller_id) {
+                    sellerId = sourceLead.seller_id;
+                    console.log(`   ✅ Vendedora espelhada: ID ${sellerId}`);
+                } else {
+                    console.log(`   ⚠️ Lead não encontrado na campanha de origem ou sem vendedora.`);
+                    if (sourceLead) console.log(`   ⚠️ Lead encontrado mas seller_id = ${sourceLead.seller_id}`);
+                }
             }
         }
 
