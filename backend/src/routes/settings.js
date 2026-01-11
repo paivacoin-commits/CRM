@@ -648,38 +648,85 @@ router.post('/import/leads', async (req, res) => {
 
                 if (existing) {
                     console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}`);
-                    if (update_existing) {
-                        // IMPORTANTE: NÃO trocar a vendedora de leads existentes!
-                        // Apenas atualizar dados, manter a vendedora original
-                        // Se seller_id foi especificado explicitamente (sem distribuição), usar ele
-                        // Se distribute está on, NÃO mudar - manter vendedora atual do lead
-                        // Se seller_id foi especificado explicitamente, usar ele, A MENOS QUE venha de campanha espelhada
+
+                    // IMPORTANTE: Verificar se o lead é de uma campanha diferente
+                    const isDifferentCampaign = campaign_id && existing.campaign_id &&
+                        String(existing.campaign_id) !== String(campaign_id);
+
+                    if (isDifferentCampaign) {
+                        console.log(`🔄 Lead de outra campanha (${existing.campaign_id} → ${campaign_id}): CRIANDO DUPLICADO`);
+                        // NÃO fazer update, deixar o código continuar para criar um novo lead
+                        // O existing será usado apenas para copiar a vendedora se houver espelhamento
+                    } else if (update_existing) {
+                        // Mesma campanha: fazer UPDATE normal
+                        console.log(`📝 Mesma campanha: ATUALIZANDO lead existente`);
+
                         let updateSellerId = existing.seller_id;
 
                         // Verificar espelhamento antes de sobrescrever
-                        // Verificar espelhamento antes de sobrescrever
                         let isMirrored = false;
+                        let mirroredSellerId = null;
+                        let mirrorCampaignId = null;
+
                         if (campaign_id) {
                             try {
                                 console.log(`🔍 Debug Mirror Update: Buscando campanha destino ID=${campaign_id}`);
                                 const targetCampaign = await db.getCampaignById(campaign_id);
 
-                                if (targetCampaign) {
-                                    console.log(`🔍 Debug Mirror Update: Campanha encontrada. MirrorID=${targetCampaign.mirror_campaign_id}`);
+                                if (targetCampaign && targetCampaign.mirror_campaign_id) {
+                                    mirrorCampaignId = targetCampaign.mirror_campaign_id;
+                                    console.log(`🔍 Debug Mirror Update: Campanha encontrada. MirrorID=${mirrorCampaignId}`);
+                                    console.log(`🔍 Debug Mirror Update: Comparando existing.campaign_id (${existing.campaign_id}) com mirror (${mirrorCampaignId})`);
 
-                                    if (targetCampaign.mirror_campaign_id) {
-                                        console.log(`🔍 Debug Mirror Update: Comparando existing.campaign_id (${existing.campaign_id}) com mirror (${targetCampaign.mirror_campaign_id})`);
+                                    // Converter para string para garantir comparação
+                                    if (String(existing.campaign_id) === String(mirrorCampaignId)) {
+                                        isMirrored = true;
+                                        console.log(`   🪞 Espelhamento detectado (Update): Buscando vendedora na campanha ${mirrorCampaignId}...`);
 
-                                        // Converter para string para garantir comparação
-                                        if (String(existing.campaign_id) === String(targetCampaign.mirror_campaign_id)) {
-                                            isMirrored = true;
-                                            console.log(`   🪞 Espelhamento detectado (Update): Mantendo vendedora ${existing.seller_id}`);
-                                        } else {
-                                            console.log(`   ❌ Falha na comparação de IDs de campanha`);
+                                        // BUSCAR vendedora na campanha de origem (igual ao CREATE path)
+                                        let sourceLead = null;
+
+                                        // Tentar por telefone primeiro
+                                        if (leadPhone && leadPhone.length >= 8) {
+                                            const phoneEnd = leadPhone.slice(-8);
+                                            const { data: leads } = await supabase
+                                                .from('leads')
+                                                .select('seller_id')
+                                                .eq('campaign_id', mirrorCampaignId)
+                                                .ilike('phone', `%${phoneEnd}`)
+                                                .limit(1);
+                                            if (leads && leads.length > 0) {
+                                                sourceLead = leads[0];
+                                                console.log(`   📞 Encontrado por telefone (${phoneEnd}): seller_id=${sourceLead.seller_id}`);
+                                            }
                                         }
+
+                                        // Se não encontrou por telefone, tentar por email
+                                        if (!sourceLead && leadEmail && leadEmail.includes('@')) {
+                                            const { data: leads } = await supabase
+                                                .from('leads')
+                                                .select('seller_id')
+                                                .eq('campaign_id', mirrorCampaignId)
+                                                .eq('email', leadEmail)
+                                                .limit(1);
+                                            if (leads && leads.length > 0) {
+                                                sourceLead = leads[0];
+                                                console.log(`   📧 Encontrado por email: seller_id=${sourceLead.seller_id}`);
+                                            }
+                                        }
+
+                                        // Se encontrou vendedora, usar ela
+                                        if (sourceLead && sourceLead.seller_id) {
+                                            mirroredSellerId = sourceLead.seller_id;
+                                            console.log(`   ✅ Vendedora espelhada: ID ${mirroredSellerId}`);
+                                        } else {
+                                            console.log(`   ⚠️ Lead não encontrado na campanha de origem ou sem vendedora`);
+                                        }
+                                    } else {
+                                        console.log(`   ❌ Falha na comparação de IDs de campanha`);
                                     }
                                 } else {
-                                    console.log(`❌ Debug Mirror Update: Campanha destino não encontrada no banco.`);
+                                    console.log(`❌ Debug Mirror Update: Campanha destino não encontrada ou sem espelhamento configurado`);
                                 }
                             } catch (e) {
                                 console.error('Erro check espelhamento update:', e);
@@ -687,24 +734,27 @@ router.post('/import/leads', async (req, res) => {
                         }
 
                         // Só muda vendedora se:
-                        // 1. Foi especificado explicitamente
-                        // 2. Distribute está OFF
-                        // 3. NÃO é um caso de espelhamento (se for espelhamento, mantém a original)
-                        if (seller_id && !distribute && !isMirrored) {
+                        // 1. Foi encontrada via espelhamento (prioridade máxima)
+                        // 2. Foi especificado explicitamente E distribute está OFF E NÃO é espelhamento
+                        if (mirroredSellerId) {
+                            // Espelhamento tem prioridade: usar vendedora encontrada na campanha de origem
+                            updateSellerId = mirroredSellerId;
+                        } else if (seller_id && !distribute && !isMirrored) {
+                            // Apenas se não for espelhamento e foi especificado explicitamente
                             updateSellerId = seller_id;
                         }
+                        // Caso contrário, mantém existing.seller_id
 
-                        // Se está adicionando subcampanha, salvar status e checking antigos e limpar
                         // Só atualiza campos se vieram preenchidos na importação
                         const updateData = {
                             first_name: leadNome ? leadNome : existing.first_name || 'Sem nome',
                             email: leadEmail ? leadEmail : existing.email || '',
                             phone: leadPhone ? leadPhone : existing.phone || '',
                             product_name: leadProduto ? leadProduto : existing.product_name || '',
-                            in_group: preserve_in_group ? existing.in_group : in_group,
                             campaign_id: campaign_id || existing.campaign_id,
                             subcampaign_id: subcampaign_id || existing.subcampaign_id,
-                            seller_id: updateSellerId // Mantém vendedora atual (ou muda só se explicitamente definido)
+                            seller_id: updateSellerId,
+                            in_group: preserve_in_group ? existing.in_group : in_group
                         };
 
                         // Se selecionou subcampanha, salvar valores antigos (se existem) e limpar
@@ -723,18 +773,22 @@ router.post('/import/leads', async (req, res) => {
                         }
 
                         // LOG DE ESPELHAMENTO NA OBSERVAÇÃO
-                        if (isMirrored) {
+                        if (isMirrored && mirroredSellerId) {
                             const dateStr = new Date().toLocaleString('pt-BR');
                             const oldObs = existing.observations || existing.notes || '';
-                            updateData.observations = `${oldObs}\n[${dateStr}] 🪞 Espelhamento: Vendedora mantida da campanha anterior.`;
+                            updateData.observations = `${oldObs}\n[${dateStr}] 🪞 Espelhamento: Vendedora copiada da campanha ${mirrorCampaignId} (ID: ${mirroredSellerId}).`;
                         }
 
                         await db.updateLeadById(existing.id, updateData);
                         updated++;
+                        continue; // Importante: pular para o próximo lead
                     } else {
                         skipped++;
+                        continue; // Importante: pular para o próximo lead
                     }
-                    continue;
+
+                    // Se chegou aqui, é porque isDifferentCampaign = true
+                    // Continuar para criar um novo lead (não fazer continue)
                 }
 
                 // Determinar vendedora

@@ -252,13 +252,72 @@ export const db = {
             };
         });
 
+
         // Aplicar filtro de in_group após mapeamento
+        let finalTotal = count || 0;
+
         if (in_group !== undefined) {
             const inGroupBool = in_group === 'true';
             leads = leads.filter(l => l.in_group === inGroupBool);
+
+            // IMPORTANTE: Precisamos contar TODOS os leads filtrados, não apenas os da página atual
+            // Para isso, fazemos uma query separada que busca todos os IDs e aplica o mesmo filtro
+            try {
+                // Buscar TODOS os leads que correspondem aos filtros (sem paginação)
+                let countQuery = supabase
+                    .from('leads')
+                    .select('id, campaign_id');
+
+                if (!show_inactive) {
+                    countQuery = countQuery.or('is_active.eq.true,is_active.is.null');
+                }
+                if (seller_id) countQuery = countQuery.eq('seller_id', seller_id);
+                if (status === 'null') {
+                    countQuery = countQuery.is('status_id', null);
+                } else if (status) {
+                    countQuery = countQuery.eq('status_id', status);
+                }
+                if (campaign_id) countQuery = countQuery.eq('campaign_id', campaign_id);
+                if (subcampaign_id) countQuery = countQuery.eq('subcampaign_id', subcampaign_id);
+                if (search) {
+                    countQuery = countQuery.or(`first_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+                }
+                if (search_observation) {
+                    countQuery = countQuery.ilike('observations', `%${search_observation}%`);
+                }
+
+                const { data: allLeadsForCount } = await countQuery;
+
+                if (allLeadsForCount && allLeadsForCount.length > 0) {
+                    const allLeadIds = allLeadsForCount.map(l => l.id);
+
+                    // Buscar in_group para todos esses leads
+                    const { data: allCampaignGroups } = await supabase
+                        .from('lead_campaign_groups')
+                        .select('lead_id, campaign_id, in_group')
+                        .in('lead_id', allLeadIds);
+
+                    const allGroupsMap = new Map();
+                    (allCampaignGroups || []).forEach(cg => {
+                        const key = `${cg.lead_id}_${cg.campaign_id}`;
+                        allGroupsMap.set(key, cg.in_group);
+                    });
+
+                    // Contar quantos leads têm o valor de in_group desejado
+                    finalTotal = allLeadsForCount.filter(l => {
+                        const key = `${l.id}_${l.campaign_id}`;
+                        const inGroupValue = allGroupsMap.has(key) ? allGroupsMap.get(key) : false;
+                        return inGroupValue === inGroupBool;
+                    }).length;
+                }
+            } catch (countError) {
+                console.error('Error counting filtered leads:', countError);
+                // Em caso de erro, usar o length dos leads da página atual como fallback
+                finalTotal = leads.length;
+            }
         }
 
-        return { leads, total: count || 0 };
+        return { leads, total: finalTotal };
     },
 
     async getRecentCheckings(limit = 10) {
