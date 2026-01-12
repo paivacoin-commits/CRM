@@ -13,12 +13,23 @@ router.use(authenticate);
 
 /**
  * GET /api/campaigns - Disponível para todos usuários autenticados
+ * Admin: retorna todas as campanhas
+ * Seller: retorna apenas campanhas onde tem leads
  */
 router.get('/', async (req, res) => {
     try {
         const { active_only } = req.query;
-        const campaigns = await db.getCampaigns({ active_only: active_only === 'true' });
-        res.json({ campaigns });
+        const isAdmin = req.user.role === 'admin';
+
+        if (isAdmin) {
+            // Admin vê todas as campanhas
+            const campaigns = await db.getCampaigns({ active_only: active_only === 'true' });
+            res.json({ campaigns });
+        } else {
+            // Seller vê apenas campanhas onde tem leads
+            const campaigns = await db.getCampaignsForSeller(req.user.id, { active_only: active_only === 'true' });
+            res.json({ campaigns });
+        }
     } catch (error) {
         console.error('Error fetching campaigns:', error);
         res.status(500).json({ error: 'Erro ao buscar campanhas' });

@@ -65,11 +65,87 @@ router.get('/', async (req, res) => {
             // Vendas concluídas
             applyFilters(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('sale_completed', true)),
 
-            // In group
-            applyFilters(supabase.from('leads').select('*', { count: 'exact', head: true }).eq('in_group', true)),
+            // In group - usar lead_campaign_groups quando há filtro de campanha
+            (() => {
+                if (campaign_id) {
+                    if (subcampaign_id) {
+                        // Com subcampaign: JOIN leads com lead_campaign_groups
+                        let query = supabase
+                            .from('leads')
+                            .select('id, lead_campaign_groups!inner(in_group)', { count: 'exact', head: true })
+                            .eq('campaign_id', parseInt(campaign_id))
+                            .eq('subcampaign_id', parseInt(subcampaign_id))
+                            .eq('lead_campaign_groups.in_group', true);
+                        if (sellerId) query = query.eq('seller_id', sellerId);
+                        return query;
+                    } else {
+                        // Sem subcampaign: query direta em lead_campaign_groups com JOIN em leads para filtrar seller
+                        if (sellerId) {
+                            return supabase
+                                .from('leads')
+                                .select('id, lead_campaign_groups!inner(in_group)', { count: 'exact', head: true })
+                                .eq('campaign_id', parseInt(campaign_id))
+                                .eq('seller_id', sellerId)
+                                .eq('lead_campaign_groups.in_group', true);
+                        } else {
+                            return supabase
+                                .from('lead_campaign_groups')
+                                .select('*', { count: 'exact', head: true })
+                                .eq('campaign_id', parseInt(campaign_id))
+                                .eq('in_group', true);
+                        }
+                    }
+                } else {
+                    // Sem filtro: contar leads ÚNICOS que estão em PELO MENOS UM grupo
+                    let query = supabase
+                        .from('leads')
+                        .select('id, lead_campaign_groups!inner(in_group)', { count: 'exact', head: true })
+                        .eq('lead_campaign_groups.in_group', true);
+                    if (sellerId) query = query.eq('seller_id', sellerId);
+                    return query;
+                }
+            })(),
 
-            // Out group
-            applyFilters(supabase.from('leads').select('*', { count: 'exact', head: true }).or('in_group.eq.false,in_group.is.null')),
+            // Out group - usar lead_campaign_groups quando há filtro de campanha
+            (() => {
+                if (campaign_id) {
+                    if (subcampaign_id) {
+                        // Com subcampaign: JOIN leads com lead_campaign_groups
+                        let query = supabase
+                            .from('leads')
+                            .select('id, lead_campaign_groups!inner(in_group)', { count: 'exact', head: true })
+                            .eq('campaign_id', parseInt(campaign_id))
+                            .eq('subcampaign_id', parseInt(subcampaign_id))
+                            .not('lead_campaign_groups.in_group', 'eq', true);
+                        if (sellerId) query = query.eq('seller_id', sellerId);
+                        return query;
+                    } else {
+                        // Sem subcampaign: query com JOIN para filtrar seller
+                        if (sellerId) {
+                            return supabase
+                                .from('leads')
+                                .select('id, lead_campaign_groups!inner(in_group)', { count: 'exact', head: true })
+                                .eq('campaign_id', parseInt(campaign_id))
+                                .eq('seller_id', sellerId)
+                                .not('lead_campaign_groups.in_group', 'eq', true);
+                        } else {
+                            return supabase
+                                .from('lead_campaign_groups')
+                                .select('*', { count: 'exact', head: true })
+                                .eq('campaign_id', parseInt(campaign_id))
+                                .or('in_group.eq.false,in_group.is.null');
+                        }
+                    }
+                } else {
+                    // Sem filtro: contar leads que NÃO estão em NENHUM grupo
+                    let query = supabase
+                        .from('leads')
+                        .select('id, lead_campaign_groups(in_group)', { count: 'exact', head: true })
+                        .not('lead_campaign_groups.in_group', 'eq', true);
+                    if (sellerId) query = query.eq('seller_id', sellerId);
+                    return query;
+                }
+            })(),
 
             // Recent leads
             (() => {
@@ -150,10 +226,26 @@ router.get('/', async (req, res) => {
         // conversionStatusIds já foi declarado acima
 
         const sellerPerformance = await Promise.all(sellers.map(async (seller) => {
+            // Apply campaign filters to seller performance queries
+            let totalQuery = supabase.from('leads').select('*', { count: 'exact', head: true }).eq('seller_id', seller.id);
+            let convQuery = supabase.from('leads').select('*', { count: 'exact', head: true }).eq('seller_id', seller.id);
+
+            // Apply campaign_id filter if present
+            if (campaign_id) {
+                totalQuery = totalQuery.eq('campaign_id', parseInt(campaign_id));
+                convQuery = convQuery.eq('campaign_id', parseInt(campaign_id));
+            }
+
+            // Apply subcampaign_id filter if present
+            if (subcampaign_id) {
+                totalQuery = totalQuery.eq('subcampaign_id', parseInt(subcampaign_id));
+                convQuery = convQuery.eq('subcampaign_id', parseInt(subcampaign_id));
+            }
+
             const [totalRes, convRes] = await Promise.all([
-                supabase.from('leads').select('*', { count: 'exact', head: true }).eq('seller_id', seller.id),
+                totalQuery,
                 conversionStatusIds.length > 0
-                    ? supabase.from('leads').select('*', { count: 'exact', head: true }).eq('seller_id', seller.id).in('status_id', conversionStatusIds)
+                    ? convQuery.in('status_id', conversionStatusIds)
                     : Promise.resolve({ count: 0 })
             ]);
             return {

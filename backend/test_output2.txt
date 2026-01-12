@@ -1,0 +1,16 @@
+﻿Testing group filter count...
+
+Campaign found: LP 05 JAN SUPER INTERESSADOS (ID: 5 )
+
+Total leads in campaign: 401
+
+Leads returned by query: 401
+
+Records in lead_campaign_groups: 401
+
+RESULTS:
+- Leads IN GROUP (in_group = true): 357
+- Leads OUT OF GROUP (in_group = false or no record): 44
+- Leads WITHOUT RECORD in lead_campaign_groups: 0
+
+Test completed!

@@ -638,6 +638,53 @@ export const db = {
         return campaignsWithCounts;
     },
 
+    async getCampaignsForSeller(sellerId, { active_only = false } = {}) {
+        // Buscar campanhas onde o seller tem leads
+        let query = supabase
+            .from('leads')
+            .select('campaign_id, campaigns!campaign_id(id, uuid, name, description, is_active, created_at, updated_at, mirror_campaign_id)')
+            .eq('seller_id', sellerId)
+            .not('campaign_id', 'is', null);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Extrair campanhas únicas
+        const campaignsMap = new Map();
+        (data || []).forEach(item => {
+            if (item.campaigns && (!active_only || item.campaigns.is_active)) {
+                campaignsMap.set(item.campaigns.id, item.campaigns);
+            }
+        });
+
+        const uniqueCampaigns = Array.from(campaignsMap.values());
+
+        // Para cada campanha, buscar contagem de leads DO SELLER
+        const campaignsWithCounts = await Promise.all(uniqueCampaigns.map(async (campaign) => {
+            const { count: totalLeads } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaign.id)
+                .eq('seller_id', sellerId);
+
+            const { count: notInGroup } = await supabase
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaign.id)
+                .eq('seller_id', sellerId)
+                .or('in_group.eq.false,in_group.is.null');
+
+            return {
+                ...campaign,
+                total_leads: totalLeads || 0,
+                not_in_group: notInGroup || 0
+            };
+        }));
+
+        // Ordenar por data de criação (mais recente primeiro)
+        return campaignsWithCounts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    },
+
     async getCampaignById(uuidOrId) {
         if (!uuidOrId) return null;
         let query = supabase.from('campaigns').select('*');

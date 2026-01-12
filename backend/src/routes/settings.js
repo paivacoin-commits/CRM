@@ -563,7 +563,16 @@ router.post('/import/leads', async (req, res) => {
             batch_name = null
         } = req.body;
 
-        console.log('📥 Import data:', { hasLeads: !!leads, hasCSV: !!csv, distribute, campaign_id, subcampaign_id, status_id });
+        console.log('📥 Import data:', {
+            hasLeads: !!leads,
+            hasCSV: !!csv,
+            distribute,
+            campaign_id,
+            subcampaign_id,
+            status_id,
+            seller_id,
+            update_existing
+        });
 
         let leadsToImport = [];
 
@@ -632,34 +641,57 @@ router.post('/import/leads', async (req, res) => {
 
                 console.log(`📋 Processando lead: nome="${leadNome}", email="${leadEmail}", phone="${leadPhone}", status="${leadStatusName}"`);
 
-                // Verificar se já existe - SIMPLIFICADO
+                // Verificar se já existe NA MESMA CAMPANHA
                 let existing = null;
 
-                if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
-                    existing = await db.getLeadByEmail(leadEmail);
-                    if (existing) console.log(`   ↳ Encontrado por email: id=${existing.id}`);
+                // Se campaign_id foi fornecido, buscar apenas nessa campanha
+                if (campaign_id) {
+                    if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
+                        existing = await db.getLeadByEmailAndCampaign(leadEmail, campaign_id);
+                        if (existing) console.log(`   ↳ Encontrado por email na campanha ${campaign_id}: id=${existing.id}`);
+                    }
+
+                    if (!existing && leadPhone && leadPhone.length >= 10) {
+                        // Tentar buscar pelo telefone completo primeiro
+                        console.log(`   🔍 Buscando por telefone COMPLETO na campanha ${campaign_id}: ${leadPhone}`);
+                        existing = await db.getLeadByPhoneAndCampaign(leadPhone, campaign_id);
+
+                        if (existing) {
+                            console.log(`   ↳ Encontrado por telefone COMPLETO na campanha ${campaign_id}: id=${existing.id}, phone=${existing.phone}`);
+                        } else {
+                            // Se não encontrou, tentar pelos últimos 8 dígitos
+                            const phoneEnd = leadPhone.slice(-8);
+                            console.log(`   🔍 Buscando por últimos 8 dígitos na campanha ${campaign_id}: ${phoneEnd}`);
+                            existing = await db.getLeadByPhoneAndCampaign(phoneEnd, campaign_id);
+
+                            if (existing) {
+                                console.log(`   ↳ Encontrado por últimos 8 dígitos na campanha ${campaign_id}: id=${existing.id}, phone=${existing.phone}`);
+                            } else {
+                                console.log(`   ↳ NÃO encontrado por telefone na campanha ${campaign_id}`);
+                            }
+                        }
+                    }
+                } else {
+                    // Sem campaign_id: buscar globalmente (comportamento antigo)
+                    if (leadEmail && leadEmail.length > 5 && leadEmail.includes('@')) {
+                        existing = await db.getLeadByEmail(leadEmail);
+                        if (existing) console.log(`   ↳ Encontrado por email: id=${existing.id}`);
+                    }
+
+                    if (!existing && leadPhone && leadPhone.length >= 10) {
+                        const phoneEnd = leadPhone.slice(-8);
+                        existing = await db.getLeadByPhone(phoneEnd);
+                        if (existing) console.log(`   ↳ Encontrado por phone: id=${existing.id}`);
+                    }
                 }
 
-                if (!existing && leadPhone && leadPhone.length >= 10) {
-                    const phoneEnd = leadPhone.slice(-8);
-                    existing = await db.getLeadByPhone(phoneEnd);
-                    if (existing) console.log(`   ↳ Encontrado por phone: id=${existing.id}`);
-                }
 
                 if (existing) {
-                    console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}`);
+                    console.log(`⚠️ Lead existe - Email: ${leadEmail}, Phone: ${leadPhone}, ExistingID: ${existing.id}, Campaign: ${existing.campaign_id}`);
 
-                    // IMPORTANTE: Verificar se o lead é de uma campanha diferente
-                    const isDifferentCampaign = campaign_id && existing.campaign_id &&
-                        String(existing.campaign_id) !== String(campaign_id);
-
-                    if (isDifferentCampaign) {
-                        console.log(`🔄 Lead de outra campanha (${existing.campaign_id} → ${campaign_id}): CRIANDO DUPLICADO`);
-                        // NÃO fazer update, deixar o código continuar para criar um novo lead
-                        // O existing será usado apenas para copiar a vendedora se houver espelhamento
-                    } else if (update_existing) {
-                        // Mesma campanha: fazer UPDATE normal
-                        console.log(`📝 Mesma campanha: ATUALIZANDO lead existente`);
+                    if (update_existing) {
+                        // Atualizar lead existente
+                        console.log(`📝 Atualizando lead existente na campanha ${existing.campaign_id}`);
 
                         let updateSellerId = existing.seller_id;
 
@@ -733,29 +765,38 @@ router.post('/import/leads', async (req, res) => {
                             }
                         }
 
-                        // Só muda vendedora se:
-                        // 1. Foi encontrada via espelhamento (prioridade máxima)
-                        // 2. Foi especificado explicitamente E distribute está OFF E NÃO é espelhamento
+                        // Prioridade de atribuição de vendedora:
+                        // 1. Espelhamento (prioridade máxima - mantém consistência entre campanhas)
+                        // 2. Vendedor explicitamente selecionado (permite reatribuição manual)
+                        // 3. Vendedor existente (fallback)
                         if (mirroredSellerId) {
                             // Espelhamento tem prioridade: usar vendedora encontrada na campanha de origem
                             updateSellerId = mirroredSellerId;
-                        } else if (seller_id && !distribute && !isMirrored) {
-                            // Apenas se não for espelhamento e foi especificado explicitamente
+                            console.log(`   🪞 Usando vendedora espelhada: ID ${mirroredSellerId}`);
+                        } else if (seller_id && !distribute) {
+                            // Se vendedor foi especificado explicitamente, usar ele (permite reatribuição)
                             updateSellerId = seller_id;
+                            console.log(`   👤 Reatribuindo para vendedor selecionado: ID ${seller_id}`);
                         }
                         // Caso contrário, mantém existing.seller_id
 
-                        // Só atualiza campos se vieram preenchidos na importação
+                        // Ao reatribuir: atualizar APENAS o vendedor, manter todos os outros dados
                         const updateData = {
-                            first_name: leadNome ? leadNome : existing.first_name || 'Sem nome',
-                            email: leadEmail ? leadEmail : existing.email || '',
-                            phone: leadPhone ? leadPhone : existing.phone || '',
-                            product_name: leadProduto ? leadProduto : existing.product_name || '',
-                            campaign_id: campaign_id || existing.campaign_id,
-                            subcampaign_id: subcampaign_id || existing.subcampaign_id,
-                            seller_id: updateSellerId,
-                            in_group: preserve_in_group ? existing.in_group : in_group
+                            seller_id: updateSellerId
                         };
+
+                        // Só atualizar campaign_id e subcampaign_id se foram explicitamente fornecidos
+                        if (campaign_id && campaign_id !== existing.campaign_id) {
+                            updateData.campaign_id = campaign_id;
+                        }
+                        if (subcampaign_id) {
+                            updateData.subcampaign_id = subcampaign_id;
+                        }
+
+                        // Preservar in_group conforme configuração
+                        if (!preserve_in_group) {
+                            updateData.in_group = in_group;
+                        }
 
                         // Se selecionou subcampanha, salvar valores antigos (se existem) e limpar
                         if (subcampaign_id) {
@@ -779,16 +820,19 @@ router.post('/import/leads', async (req, res) => {
                             updateData.observations = `${oldObs}\n[${dateStr}] 🪞 Espelhamento: Vendedora copiada da campanha ${mirrorCampaignId} (ID: ${mirroredSellerId}).`;
                         }
 
+                        console.log(`📝 Dados que serão atualizados:`, JSON.stringify(updateData, null, 2));
+                        console.log(`📝 Lead ID: ${existing.id}, Vendedor atual: ${existing.seller_id}, Novo vendedor: ${updateData.seller_id}`);
+
                         await db.updateLeadById(existing.id, updateData);
+                        console.log(`✅ Lead ${existing.id} atualizado com sucesso!`);
                         updated++;
                         continue; // Importante: pular para o próximo lead
                     } else {
+                        // update_existing = false: não atualizar, pular este lead
+                        console.log(`⏭️ Pulando lead existente (update_existing=false): ${leadNome}`);
                         skipped++;
-                        continue; // Importante: pular para o próximo lead
+                        continue;
                     }
-
-                    // Se chegou aqui, é porque isDifferentCampaign = true
-                    // Continuar para criar um novo lead (não fazer continue)
                 }
 
                 // Determinar vendedora

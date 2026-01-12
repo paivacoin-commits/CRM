@@ -28,8 +28,9 @@ export default function Dashboard() {
     useEffect(() => {
         loadDashboard();
         loadSchedules();
+        // Carregar campanhas para admin e vendedoras
+        api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns || []));
         if (isAdmin) {
-            api.getCampaigns({ active_only: false }).then(d => setCampaigns(d.campaigns || []));
             api.getSubcampaigns({}).then(d => setSubcampaigns(d.subcampaigns || [])).catch(() => { });
         }
     }, [isAdmin]);
@@ -50,7 +51,7 @@ export default function Dashboard() {
         <div className="fade-in">
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
                 <h1 className="page-title">{isAdmin ? 'Dashboard Administrativo' : 'Meu Painel'}</h1>
-                {isAdmin && campaigns.length > 0 && (
+                {campaigns.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Filter size={16} color="var(--text-secondary)" />
                         <select
@@ -62,7 +63,7 @@ export default function Dashboard() {
                             <option value="">Todas as Campanhas</option>
                             {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
-                        {campaignFilter && filteredSubcampaigns.length > 0 && (
+                        {isAdmin && campaignFilter && filteredSubcampaigns.length > 0 && (
                             <select
                                 className="form-select"
                                 style={{ minWidth: 150 }}
