@@ -179,7 +179,10 @@ export const db = {
         if (!show_inactive) {
             query = query.or('is_active.eq.true,is_active.is.null');
         }
-        if (seller_id) query = query.eq('seller_id', seller_id);
+        if (seller_id) {
+            // Include leads assigned to this seller OR unassigned leads (seller_id = null)
+            query = query.or(`seller_id.eq.${seller_id},seller_id.is.null`);
+        }
         if (status === 'null') {
             query = query.is('status_id', null);
         } else if (status) {

@@ -945,7 +945,7 @@ export default function Leads() {
                                             </td>
                                             <td>
                                                 {lead.phone ? (
-                                                    isOwner ? (
+                                                    (isOwner || lead.seller_id === null) ? (
                                                         <button
                                                             onClick={() => openWhatsappModal(lead)}
                                                             className="whatsapp-btn"
@@ -960,7 +960,35 @@ export default function Leads() {
                                                     )
                                                 ) : '-'}
                                             </td>
-                                            <td style={{ fontSize: '0.75rem' }}>{lead.seller_name || '-'}</td>
+                                            <td style={{ fontSize: '0.75rem' }}>
+                                                {!isAdmin && lead.seller_id === null ? (
+                                                    <select
+                                                        className="form-select"
+                                                        style={{
+                                                            width: 'auto',
+                                                            padding: '4px 8px',
+                                                            fontSize: '0.75rem',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        value=""
+                                                        onChange={async (e) => {
+                                                            if (e.target.value) {
+                                                                try {
+                                                                    await api.selfAssignLead(lead.uuid);
+                                                                    loadLeads();
+                                                                } catch (error) {
+                                                                    alert('Erro ao atribuir lead');
+                                                                }
+                                                            }
+                                                        }}
+                                                    >
+                                                        <option value="">- Selecione -</option>
+                                                        <option value={user?.id}>{user?.name}</option>
+                                                    </select>
+                                                ) : (
+                                                    lead.seller_name || '-'
+                                                )}
+                                            </td>
                                             <td>
                                                 {lead.status_id ? (
                                                     <select

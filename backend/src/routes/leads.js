@@ -345,6 +345,33 @@ router.patch('/:uuid/reassign', authorize('admin'), async (req, res) => {
 });
 
 /**
+ * PATCH /api/leads/:uuid/self-assign
+ * Allows sellers to assign unassigned leads to themselves
+ */
+router.patch('/:uuid/self-assign', async (req, res) => {
+    try {
+        const { uuid } = req.params;
+
+        const lead = await db.getLeadByUuid(uuid);
+        if (!lead) {
+            return res.status(404).json({ error: 'Lead não encontrado' });
+        }
+
+        // Only allow if lead is currently unassigned
+        if (lead.seller_id !== null) {
+            return res.status(400).json({ error: 'Lead já está atribuído' });
+        }
+
+        // Assign to current user (seller)
+        await db.updateLead(uuid, { seller_id: req.user.id });
+        res.json({ message: 'Lead atribuído com sucesso' });
+    } catch (error) {
+        console.error('Error self-assigning lead:', error);
+        res.status(500).json({ error: 'Erro ao atribuir lead' });
+    }
+});
+
+/**
  * PATCH /api/leads/:uuid/in-group
  */
 router.patch('/:uuid/in-group', async (req, res) => {
