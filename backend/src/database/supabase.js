@@ -156,6 +156,16 @@ export const db = {
 
     // ==================== LEADS ====================
     async getLeads({ status, search, search_observation, campaign_id, subcampaign_id, in_group, show_inactive, seller_id, page = 1, limit = 50 }) {
+        // ESTRATÉGIA ESPECIAL para filtro in_group:
+        // Como o in_group vem de uma tabela separada (lead_campaign_groups),
+        // precisamos buscar TODOS os leads que correspondem aos outros filtros primeiro,
+        // depois aplicar o filtro in_group, e então paginar manualmente.
+        // Isso garante que a paginação funcione corretamente.
+
+        const useInGroupFilter = in_group !== undefined;
+        const fetchLimit = useInGroupFilter ? 5000 : limit; // Buscar mais leads se filtro in_group está ativo
+        const fetchOffset = useInGroupFilter ? 0 : (page - 1) * limit;
+
         let query = supabase
             .from('leads')
             .select(`
@@ -171,7 +181,6 @@ export const db = {
         }
         if (seller_id) query = query.eq('seller_id', seller_id);
         if (status === 'null') {
-            // Filtrar leads SEM status (status_id é null)
             query = query.is('status_id', null);
         } else if (status) {
             query = query.eq('status_id', status);
@@ -180,16 +189,13 @@ export const db = {
         if (subcampaign_id) query = query.eq('subcampaign_id', subcampaign_id);
 
         if (search) {
-            // Busca por PARTES do nome, email ou telefone (contains)
             query = query.or(`first_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
         }
         if (search_observation) {
-            // Busca nas observações (campo JSONB array)
             query = query.ilike('observations', `%${search_observation}%`);
         }
 
-        const offset = (page - 1) * limit;
-        query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+        query = query.order('created_at', { ascending: false }).range(fetchOffset, fetchOffset + fetchLimit - 1);
 
         const { data, error, count } = await query;
         if (error) throw error;
@@ -198,26 +204,19 @@ export const db = {
         const leadIds = (data || []).map(l => l.id);
         let campaignGroupsMap = new Map();
 
-        // Buscar quais campanhas têm grupos configurados
-        const campaignIds = [...new Set((data || []).map(l => l.campaign_id).filter(Boolean))];
-        let campaignsWithGroups = new Set();
-
-        if (campaignIds.length > 0) {
-            const { data: campaignGroupsData } = await supabase
-                .from('campaign_groups')
-                .select('campaign_id')
-                .in('campaign_id', campaignIds);
-
-            (campaignGroupsData || []).forEach(cg => {
-                campaignsWithGroups.add(cg.campaign_id);
-            });
-        }
-
         if (leadIds.length > 0) {
-            const { data: campaignGroups } = await supabase
+            // Buscar in_group para os leads DA CAMPANHA ESPECÍFICA
+            let pageGroupQuery = supabase
                 .from('lead_campaign_groups')
                 .select('lead_id, campaign_id, in_group')
                 .in('lead_id', leadIds);
+
+            // Filtrar por campaign_id se estiver filtrando por campanha
+            if (campaign_id) {
+                pageGroupQuery = pageGroupQuery.eq('campaign_id', campaign_id);
+            }
+
+            const { data: campaignGroups } = await pageGroupQuery;
 
             // Criar mapa: lead_id + campaign_id -> in_group
             (campaignGroups || []).forEach(cg => {
@@ -228,13 +227,8 @@ export const db = {
 
         // Mapear dados para formato esperado
         let leads = (data || []).map(l => {
-            // Buscar in_group específico da campanha do lead
             const key = `${l.id}_${l.campaign_id}`;
             let inGroupValue = campaignGroupsMap.has(key) ? campaignGroupsMap.get(key) : false;
-
-            // Não forçar in_group = false para campanhas sem grupos
-            // Isso permite que marcações manuais sejam preservadas
-            // A sincronização manual via botão "Sincronizar Grupo" atualizará conforme necessário
 
             return {
                 ...l,
@@ -247,77 +241,46 @@ export const db = {
                 subcampaign_id: l.subcampaign_id,
                 subcampaign_name: l.subcampaigns?.name,
                 subcampaign_color: l.subcampaigns?.color,
-                // in_group agora vem da tabela lead_campaign_groups (específico por campanha)
                 in_group: inGroupValue
             };
         });
 
-
-        // Aplicar filtro de in_group após mapeamento
+        // Aplicar filtro de in_group e paginar manualmente se necessário
         let finalTotal = count || 0;
+        let paginatedLeads = leads;
 
-        if (in_group !== undefined) {
+        if (useInGroupFilter) {
             const inGroupBool = in_group === 'true';
-            leads = leads.filter(l => l.in_group === inGroupBool);
 
-            // IMPORTANTE: Precisamos contar TODOS os leads filtrados, não apenas os da página atual
-            // Para isso, fazemos uma query separada que busca todos os IDs e aplica o mesmo filtro
-            try {
-                // Buscar TODOS os leads que correspondem aos filtros (sem paginação)
-                let countQuery = supabase
-                    .from('leads')
-                    .select('id, campaign_id');
+            console.log(`🔍 [DEBUG] Filtro in_group aplicado:`, {
+                campaign_id,
+                in_group,
+                inGroupBool,
+                totalLeadsBeforeFilter: leads.length,
+                totalCountBeforeFilter: count
+            });
 
-                if (!show_inactive) {
-                    countQuery = countQuery.or('is_active.eq.true,is_active.is.null');
-                }
-                if (seller_id) countQuery = countQuery.eq('seller_id', seller_id);
-                if (status === 'null') {
-                    countQuery = countQuery.is('status_id', null);
-                } else if (status) {
-                    countQuery = countQuery.eq('status_id', status);
-                }
-                if (campaign_id) countQuery = countQuery.eq('campaign_id', campaign_id);
-                if (subcampaign_id) countQuery = countQuery.eq('subcampaign_id', subcampaign_id);
-                if (search) {
-                    countQuery = countQuery.or(`first_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
-                }
-                if (search_observation) {
-                    countQuery = countQuery.ilike('observations', `%${search_observation}%`);
-                }
+            // Filtrar leads por in_group
+            const filteredLeads = leads.filter(l => l.in_group === inGroupBool);
 
-                const { data: allLeadsForCount } = await countQuery;
+            console.log(`🔍 [DEBUG] Leads após filtro in_group: ${filteredLeads.length}`);
 
-                if (allLeadsForCount && allLeadsForCount.length > 0) {
-                    const allLeadIds = allLeadsForCount.map(l => l.id);
+            // Paginar manualmente
+            const offset = (page - 1) * limit;
+            paginatedLeads = filteredLeads.slice(offset, offset + limit);
+            finalTotal = filteredLeads.length;
 
-                    // Buscar in_group para todos esses leads
-                    const { data: allCampaignGroups } = await supabase
-                        .from('lead_campaign_groups')
-                        .select('lead_id, campaign_id, in_group')
-                        .in('lead_id', allLeadIds);
-
-                    const allGroupsMap = new Map();
-                    (allCampaignGroups || []).forEach(cg => {
-                        const key = `${cg.lead_id}_${cg.campaign_id}`;
-                        allGroupsMap.set(key, cg.in_group);
-                    });
-
-                    // Contar quantos leads têm o valor de in_group desejado
-                    finalTotal = allLeadsForCount.filter(l => {
-                        const key = `${l.id}_${l.campaign_id}`;
-                        const inGroupValue = allGroupsMap.has(key) ? allGroupsMap.get(key) : false;
-                        return inGroupValue === inGroupBool;
-                    }).length;
-                }
-            } catch (countError) {
-                console.error('Error counting filtered leads:', countError);
-                // Em caso de erro, usar o length dos leads da página atual como fallback
-                finalTotal = leads.length;
-            }
+            console.log(`🔍 [DEBUG] Paginação manual:`, {
+                page,
+                limit,
+                offset,
+                totalFiltered: filteredLeads.length,
+                pageLeads: paginatedLeads.length,
+                finalTotal
+            });
         }
 
-        return { leads, total: finalTotal };
+        return { leads: paginatedLeads, total: finalTotal };
     },
 
     async getRecentCheckings(limit = 10) {
@@ -414,7 +377,7 @@ export const db = {
     },
 
     async getLeadByPhoneAndCampaign(phoneEnd, campaignId) {
-        if (!phoneEnd || phoneEnd.length < 10) return null;
+        if (!phoneEnd || phoneEnd.length < 8) return null;
         try {
             const { data, error } = await supabase
                 .from('leads')
@@ -431,6 +394,28 @@ export const db = {
             return data;
         } catch (err) {
             console.error('getLeadByPhoneAndCampaign exception:', err);
+            return null;
+        }
+    },
+
+    async getLeadByEmailAndCampaign(email, campaignId) {
+        if (!email || email.length < 3) return null;
+        try {
+            const { data, error } = await supabase
+                .from('leads')
+                .select('id, email, phone, first_name, product_name, status_id, checking, subcampaign_id, previous_status_id, previous_checking, campaign_id, seller_id, in_group, observations')
+                .eq('campaign_id', campaignId)
+                .ilike('email', email)
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                console.error('getLeadByEmailAndCampaign error:', error);
+                return null;
+            }
+            return data;
+        } catch (err) {
+            console.error('getLeadByEmailAndCampaign exception:', err);
             return null;
         }
     },
