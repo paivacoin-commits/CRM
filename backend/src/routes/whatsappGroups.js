@@ -193,6 +193,24 @@ router.post('/connections/:id/connect', async (req, res) => {
             });
         }
 
+        // Forçar desconexão anterior e limpeza de sessão para garantir novo QR Code
+        console.log(`🔄 Reiniciando sessão para conexão: ${id}`);
+        await disconnectWhatsApp(id);
+
+        // Pequeno delay para garantir que o banco processou a deleção
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // ⚠️ FIX: Marcar IMEDIATAMENTE como 'connecting' no banco
+        // Isso evita que o frontend (que faz polling) receba 'disconnected' e pare de buscar o QR Code
+        await supabase
+            .from('whatsapp_connections')
+            .update({
+                status: 'connecting',
+                qr_code: null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
         // Inicializar conexão com pairing code ou QR code
         await initializeWhatsAppConnection(id, usePairingCode || false, phoneNumber);
 

@@ -172,8 +172,8 @@ export default function Groups() {
             const connection = connections.find(c => c.id === connectionId);
             setSelectedConnection({ ...connection, status: 'connecting' });
 
-            // Começar a buscar QR code
-            setTimeout(() => fetchQRCode(connectionId), 1000);
+            // Começar a buscar QR code (delay maior para dar tempo do backend gerar)
+            setTimeout(() => fetchQRCode(connectionId), 3000);
         } catch (error) {
             console.error('Erro ao conectar WhatsApp:', error);
             alert('Erro ao conectar WhatsApp: ' + error.message);
@@ -607,6 +607,29 @@ export default function Groups() {
                                                 disabled={loading}
                                             >
                                                 Desconectar
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {conn.status === 'connecting' && (
+                                        <>
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => {
+                                                    setSelectedConnection(conn);
+                                                    fetchQRCode(conn.id);
+                                                }}
+                                                disabled={loading}
+                                            >
+                                                <Smartphone size={16} />
+                                                Ver QR Code
+                                            </button>
+                                            <button
+                                                className="btn btn-warning btn-sm"
+                                                onClick={() => disconnectWhatsApp(conn.id)}
+                                                disabled={loading}
+                                            >
+                                                Cancelar
                                             </button>
                                         </>
                                     )}

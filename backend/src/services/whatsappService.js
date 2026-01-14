@@ -7,7 +7,11 @@ import makeWASocket, {
     DisconnectReason,
     useMultiFileAuthState,
     fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore
+    makeCacheableSignalKeyStore,
+    initAuthCreds,
+    BufferJSON,
+    isJidBroadcast,
+    proto
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -27,6 +31,112 @@ const activeConnections = new Map();
 const logger = pino({ level: 'silent' }); // Silencioso para produção
 
 /**
+ * Custom auth state using Supabase instead of filesystem
+ * This prevents session loss on deploy/restart
+ */
+async function useSupabaseAuthState(connectionId) {
+    // Helper to revive JSON with Buffers
+    const reviveAuthState = (key, value) => {
+        return BufferJSON.reviver(key, value);
+    };
+
+    // Load existing state from database
+    const { data } = await supabase
+        .from('whatsapp_auth_state')
+        .select('creds, keys')
+        .eq('connection_id', connectionId)
+        .single();
+
+    // Initialize creds
+    let creds;
+    let keys = {};
+
+    if (data && data.creds) {
+        // Revive creds (convert Buffer string representations back to Buffers)
+        creds = JSON.parse(JSON.stringify(data.creds), reviveAuthState);
+    } else {
+        creds = await initAuthCreds();
+    }
+
+    if (data && data.keys) {
+        // Revive keys
+        keys = JSON.parse(JSON.stringify(data.keys), reviveAuthState);
+    }
+
+    console.log(`📊 Estado da sessão carregado (Keys: ${Object.keys(keys).length})`);
+
+    // Debounce save function to prevent database flooding
+    let saveTimeout;
+    const saveState = async () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+
+        saveTimeout = setTimeout(async () => {
+            try {
+                // Serialize with BufferJSON replacer
+                const credsJSON = JSON.parse(JSON.stringify(creds, BufferJSON.replacer));
+                const keysJSON = JSON.parse(JSON.stringify(keys, BufferJSON.replacer));
+
+                await supabase
+                    .from('whatsapp_auth_state')
+                    .upsert({
+                        connection_id: connectionId,
+                        creds: credsJSON,
+                        keys: keysJSON,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'connection_id'
+                    });
+                // console.log('💾 Credenciais salvas no Supabase (Debounced)');
+            } catch (error) {
+                console.error('❌ Erro ao salvar credenciais:', error);
+            }
+        }, 2000); // Wait 2s before saving
+    };
+
+    return {
+        state: {
+            creds,
+            keys: {
+                get: (type, ids) => {
+                    const data = {};
+                    ids.forEach(id => {
+                        const key = `${type}-${id}`;
+                        let value = keys[key];
+                        if (type === 'app-state-sync-key' && value) {
+                            value = proto.Message.AppStateSyncKeyData.fromObject(value);
+                        }
+                        data[id] = value;
+                    });
+                    return data;
+                },
+                set: async (data) => {
+                    let hasChanges = false;
+                    for (const type in data) {
+                        for (const id in data[type]) {
+                            const key = `${type}-${id}`;
+                            const value = data[type][id];
+                            if (value) {
+                                keys[key] = value;
+                                hasChanges = true;
+                            } else {
+                                delete keys[key];
+                                hasChanges = true;
+                            }
+                        }
+                    }
+                    if (hasChanges) {
+                        await saveState();
+                    }
+                }
+            }
+        },
+        saveCreds: async () => {
+            await saveState();
+        }
+    };
+}
+
+/**
  * Inicializar conexão WhatsApp com suporte a Pairing Code
  * @param {string} connectionId - ID da conexão
  * @param {boolean} usePairingCode - Se true, usa código de pareamento em vez de QR code
@@ -36,14 +146,10 @@ export async function initializeWhatsAppConnection(connectionId, usePairingCode 
     try {
         console.log(`🔄 Iniciando conexão WhatsApp: ${connectionId}`);
         console.log(`📱 Método: ${usePairingCode ? 'PAIRING CODE (Redirect+)' : 'QR CODE'}`);
+        console.log(`💾 Usando Supabase para persistência de sessão`);
 
-        // Diretório para armazenar sessão
-        const authDir = path.join(__dirname, '../../.wwebjs_auth', connectionId);
-        if (!fs.existsSync(authDir)) {
-            fs.mkdirSync(authDir, { recursive: true });
-        }
-
-        const { state, saveCreds } = await useMultiFileAuthState(authDir);
+        // Use Supabase for auth state instead of filesystem
+        const { state, saveCreds } = await useSupabaseAuthState(connectionId);
         const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
@@ -94,7 +200,7 @@ export async function initializeWhatsAppConnection(connectionId, usePairingCode 
             const { connection, lastDisconnect, qr } = update;
 
             if (qr) {
-                console.log('📱 QR Code gerado');
+                console.log(`📱 QR Code gerado para conexão ${connectionId}`);
                 const qrCodeDataURL = await QRCode.toDataURL(qr);
 
                 // Salvar QR no banco
@@ -142,15 +248,15 @@ export async function initializeWhatsAppConnection(connectionId, usePairingCode 
                 } else {
                     activeConnections.delete(connectionId);
 
-                    // Limpar sessão também ao desconectar/logout via evento
+                    // Limpar sessão do Supabase ao desconectar/logout via evento
                     try {
-                        const authDir = path.join(__dirname, '../../.wwebjs_auth', connectionId);
-                        if (fs.existsSync(authDir)) {
-                            console.log(`🗑️ Removendo sessão (evento close): ${authDir}`);
-                            fs.rmSync(authDir, { recursive: true, force: true });
-                        }
+                        console.log(`🗑️ Removendo sessão do Supabase (evento close): ${connectionId}`);
+                        await supabase
+                            .from('whatsapp_auth_state')
+                            .delete()
+                            .eq('connection_id', connectionId);
                     } catch (err) {
-                        console.error('Erro ao remover diretório de sessão:', err);
+                        console.error('Erro ao remover sessão do Supabase:', err);
                     }
 
                     await supabase
@@ -275,22 +381,25 @@ export async function disconnectWhatsApp(connectionId) {
     const sock = activeConnections.get(connectionId);
     if (sock) {
         try {
-            await sock.logout();
+            console.log(`🔌 Encerrando socket para: ${connectionId}`);
+            // Tentar fechar socket graciosamente
+            if (sock.ws) sock.ws.close();
+            sock.end(undefined);
         } catch (err) {
-            console.error('Erro ao fazer logout:', err);
+            console.error('Erro ao fechar socket:', err);
         }
         activeConnections.delete(connectionId);
     }
 
-    // Limpar diretório de sessão para garantir novo QR code
+    // Limpar sessão do Supabase para garantir novo QR code
     try {
-        const authDir = path.join(__dirname, '../../.wwebjs_auth', connectionId);
-        if (fs.existsSync(authDir)) {
-            console.log(`🗑️ Removendo sessão: ${authDir}`);
-            fs.rmSync(authDir, { recursive: true, force: true });
-        }
+        console.log(`🗑️ Removendo sessão do Supabase: ${connectionId}`);
+        await supabase
+            .from('whatsapp_auth_state')
+            .delete()
+            .eq('connection_id', connectionId);
     } catch (err) {
-        console.error('Erro ao remover diretório de sessão:', err);
+        console.error('Erro ao remover sessão do Supabase:', err);
     }
 
     await supabase
@@ -345,14 +454,20 @@ export async function restoreSessions() {
         console.log(`📊 Encontradas ${connections.length} conexões marcadas como ativas`);
 
         for (const conn of connections) {
-            const authDir = path.join(__dirname, '../../.wwebjs_auth', conn.id);
-            if (fs.existsSync(authDir)) {
-                console.log(`🔌 Restaurando sessão: ${conn.name} (${conn.id})`);
+            // Check if session exists in Supabase
+            const { data: authState } = await supabase
+                .from('whatsapp_auth_state')
+                .select('connection_id')
+                .eq('connection_id', conn.id)
+                .single();
+
+            if (authState) {
+                console.log(`🔌 Restaurando sessão do Supabase: ${conn.name} (${conn.id})`);
                 initializeWhatsAppConnection(conn.id).catch(err => {
                     console.error(`❌ Falha ao restaurar sessão ${conn.name}:`, err);
                 });
             } else {
-                console.log(`⚠️ Sessão ${conn.name} não possui arquivos de autenticação. Marcando como desconectada.`);
+                console.log(`⚠️ Sessão ${conn.name} não possui dados de autenticação no Supabase. Marcando como desconectada.`);
                 await supabase
                     .from('whatsapp_connections')
                     .update({ status: 'disconnected' })

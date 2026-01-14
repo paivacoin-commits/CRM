@@ -658,6 +658,7 @@ export default function Leads() {
                     {isAdmin && sellers.length > 0 && (
                         <select className="form-select" style={{ width: 150 }} value={sellerFilter} onChange={e => setSellerFilter(e.target.value)}>
                             <option value="">Vendedora</option>
+                            <option value="null" style={{ color: '#f59e0b' }}>⚠ Sem vendedora</option>
                             {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     )}

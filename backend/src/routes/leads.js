@@ -32,7 +32,8 @@ router.get('/', async (req, res) => {
             // Se pesquisar, effectiveSellerId fica null = mostra todos
         } else if (seller_id) {
             // Admin pode filtrar por vendedor
-            effectiveSellerId = parseInt(seller_id);
+            // Preservar 'null' como string para filtrar leads sem vendedora
+            effectiveSellerId = seller_id === 'null' ? 'null' : parseInt(seller_id);
         }
 
         const filters = {
@@ -81,7 +82,7 @@ router.get('/all-uuids', authenticate, async (req, res) => {
                 effectiveSellerId = req.user.id;
             }
         } else if (seller_id) {
-            effectiveSellerId = parseInt(seller_id);
+            effectiveSellerId = seller_id === 'null' ? 'null' : parseInt(seller_id);
         }
 
         const uuids = await db.getAllLeadUuids({

@@ -179,7 +179,10 @@ export const db = {
         if (!show_inactive) {
             query = query.or('is_active.eq.true,is_active.is.null');
         }
-        if (seller_id) {
+        if (seller_id === 'null') {
+            // Filter ONLY leads without a seller
+            query = query.is('seller_id', null);
+        } else if (seller_id) {
             // Include leads assigned to this seller OR unassigned leads (seller_id = null)
             query = query.or(`seller_id.eq.${seller_id},seller_id.is.null`);
         }
@@ -504,7 +507,11 @@ export const db = {
             if (filters.status) query = query.eq('status_id', filters.status);
             if (filters.campaign_id) query = query.eq('campaign_id', filters.campaign_id);
             if (filters.in_group !== undefined) query = query.eq('in_group', filters.in_group === 'true');
-            if (filters.seller_id) query = query.eq('seller_id', filters.seller_id);
+            if (filters.seller_id === 'null') {
+                query = query.is('seller_id', null);
+            } else if (filters.seller_id) {
+                query = query.eq('seller_id', filters.seller_id);
+            }
             if (filters.search) {
                 query = query.or(`first_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
             }
