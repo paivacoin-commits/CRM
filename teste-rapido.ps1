@@ -1,0 +1,1 @@
+Invoke-RestMethod -Uri "https://crmsales-recovery-crm-api.onrender.com/api/webhook/exclusion" -Method Post -Headers @{"Content-Type"="application/json"} -Body '{"phone":"5511993603015"}' | ConvertTo-Json -Depth 10
