@@ -385,13 +385,16 @@ router.post('/exclusion', async (req, res) => {
             return res.status(403).json({ error: 'Webhook de exclusão desabilitado' });
         }
 
-        // Verificar token
-        const authHeader = req.headers.authorization;
-        const token = authHeader?.replace('Bearer ', '') || req.query.token;
+        // Verificar token APENAS se estiver configurado
+        if (settings.exclusion_token && settings.exclusion_token.trim() !== '') {
+            const authHeader = req.headers.authorization;
+            const token = authHeader?.replace('Bearer ', '') || req.query.token;
 
-        if (!token || token !== settings.exclusion_token) {
-            return res.status(401).json({ error: 'Token inválido' });
+            if (!token || token !== settings.exclusion_token) {
+                return res.status(401).json({ error: 'Token inválido' });
+            }
         }
+        // Se não tiver token configurado, permite acesso sem autenticação
 
         const body = req.body;
         // Tentar pegar telefone de vários campos possíveis
