@@ -24,10 +24,20 @@ export default function ExclusionSettings() {
     useEffect(() => {
         const fetchLogs = async () => {
             try {
+                console.log('🔍 [ExclusionLogs] Fetching logs...');
                 const data = await api.getExclusionLogs();
-                if (data && data.logs) setLogs(data.logs);
+                console.log('📦 [ExclusionLogs] Received data:', data);
+                console.log('📊 [ExclusionLogs] Logs array:', data?.logs);
+                console.log('🔢 [ExclusionLogs] Logs count:', data?.logs?.length);
+
+                if (data && data.logs) {
+                    console.log('✅ [ExclusionLogs] Setting logs state with', data.logs.length, 'items');
+                    setLogs(data.logs);
+                } else {
+                    console.warn('⚠️ [ExclusionLogs] No logs in response');
+                }
             } catch (error) {
-                console.error('Error fetching logs:', error);
+                console.error('❌ [ExclusionLogs] Error fetching logs:', error);
             }
         };
 
