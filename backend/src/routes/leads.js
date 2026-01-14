@@ -287,6 +287,59 @@ router.patch('/:uuid/status', async (req, res) => {
     }
 });
 
+
+/**
+ * PATCH /api/leads/:uuid/details
+ * Update lead contact details (name, email, phone)
+ */
+router.patch('/:uuid/details', async (req, res) => {
+    try {
+        const { uuid } = req.params;
+        const { first_name, email, phone } = req.body;
+
+        // Validate at least one field is provided
+        if (!first_name && !email && !phone) {
+            return res.status(400).json({ error: 'Pelo menos um campo deve ser fornecido' });
+        }
+
+        const lead = await db.getLeadByUuid(uuid);
+        if (!lead) {
+            return res.status(404).json({ error: 'Lead não encontrado' });
+        }
+
+        // Permission check: sellers can only edit their own leads
+        if (req.user.role === 'seller' && lead.seller_id !== req.user.id) {
+            return res.status(403).json({ error: 'Sem permissão para atualizar este lead' });
+        }
+
+        // Validate email format if provided
+        if (email !== undefined && email !== null && email.trim() !== '') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email.trim())) {
+                return res.status(400).json({ error: 'Formato de email inválido' });
+            }
+        }
+
+        // Build update object with only provided fields
+        const updateData = {};
+        if (first_name !== undefined) updateData.first_name = first_name?.trim() || null;
+        if (email !== undefined) updateData.email = email?.trim()?.toLowerCase() || null;
+        if (phone !== undefined) updateData.phone = phone?.trim() || null;
+
+        await db.updateLead(uuid, updateData);
+
+        // Return updated lead
+        const updatedLead = await db.getLeadByUuid(uuid);
+        res.json({
+            message: 'Lead atualizado com sucesso',
+            lead: updatedLead
+        });
+    } catch (error) {
+        console.error('Error updating lead details:', error);
+        res.status(500).json({ error: 'Erro ao atualizar lead' });
+    }
+});
+
 /**
  * PATCH /api/leads/:uuid/observation
  */

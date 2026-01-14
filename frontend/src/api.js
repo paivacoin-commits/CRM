@@ -30,6 +30,7 @@ export const api = {
     updateLeadInGroup: (uuid, in_group) => request(`/leads/${uuid}/in-group`, { method: 'PATCH', body: JSON.stringify({ in_group }) }),
     updateLeadChecking: (uuid, checking) => request(`/leads/${uuid}/checking`, { method: 'PATCH', body: JSON.stringify({ checking }) }),
     updateLeadSaleCompleted: (uuid, sale_completed) => request(`/leads/${uuid}/sale-completed`, { method: 'PATCH', body: JSON.stringify({ sale_completed }) }),
+    updateLeadDetails: (uuid, details) => request(`/leads/${uuid}/details`, { method: 'PATCH', body: JSON.stringify(details) }),
     deleteLead: (uuid) => request(`/leads/${uuid}`, { method: 'DELETE' }),
     deleteLeadsBulk: (lead_uuids) => request('/leads/bulk', { method: 'DELETE', body: JSON.stringify({ lead_uuids }) }),
     bulkReassignLeads: (lead_uuids, seller_id) => request('/leads/bulk/reassign', { method: 'PATCH', body: JSON.stringify({ lead_uuids, seller_id }) }),
@@ -106,4 +107,8 @@ export const api = {
     generateHotmartSecret: () => request('/hotmart/generate-secret', { method: 'POST' }),
     getHotmartLogs: (params = {}) => request(`/hotmart/logs?${new URLSearchParams(params)}`),
     testHotmartWebhook: () => request('/hotmart/test', { method: 'POST' }),
+    // Groups
+    getAllWhatsAppGroups: () => request('/whatsapp-groups/groups'),
+    // Exclusion
+    getExclusionLogs: (params = {}) => request(`/webhook/exclusion/logs?${new URLSearchParams(params)}`),
 };

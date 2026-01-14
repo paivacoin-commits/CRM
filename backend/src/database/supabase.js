@@ -860,6 +860,9 @@ export const db = {
                     round_robin_enabled: settings.round_robin_enabled !== undefined ? settings.round_robin_enabled : true,
                     greatpages_ngrok_url: settings.greatpages_ngrok_url || null,
                     greatpages_default_campaign_id: settings.greatpages_default_campaign_id || null,
+                    exclusion_enabled: settings.exclusion_enabled || false,
+                    exclusion_token: settings.exclusion_token || null,
+                    exclusion_group_ids: settings.exclusion_group_ids || [],
                     updated_at: new Date().toISOString()
                 })
                 .select()

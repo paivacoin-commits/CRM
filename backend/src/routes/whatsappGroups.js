@@ -907,4 +907,26 @@ router.post('/whapi/groups/:groupId/sync', async (req, res) => {
     }
 });
 
+/**
+ * Listar TODOS os grupos (de todas as conexões)
+ * Útil para seleção global
+ */
+router.get('/groups', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('whatsapp_groups')
+            .select(`
+                *,
+                whatsapp_connections (name, phone_number)
+            `)
+            .order('group_name');
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Erro ao listar todos os grupos:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

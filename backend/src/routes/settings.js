@@ -41,7 +41,10 @@ router.get('/api', async (req, res) => {
             require_token: settings.require_token,
             round_robin_enabled: settings.round_robin_enabled,
             greatpages_ngrok_url: settings.greatpages_ngrok_url,
-            greatpages_default_campaign_id: settings.greatpages_default_campaign_id
+            greatpages_default_campaign_id: settings.greatpages_default_campaign_id,
+            exclusion_enabled: settings.exclusion_enabled,
+            exclusion_token: settings.exclusion_token,
+            exclusion_group_ids: settings.exclusion_group_ids || []
         });
     } catch (error) {
         console.error('Error fetching API settings:', error);
@@ -54,9 +57,19 @@ router.get('/api', async (req, res) => {
  */
 router.patch('/api', async (req, res) => {
     try {
-        const { webhook_enabled, require_token, regenerate_token, round_robin_enabled, greatpages_ngrok_url, greatpages_default_campaign_id } = req.body;
+        const {
+            webhook_enabled,
+            require_token,
+            regenerate_token,
+            round_robin_enabled,
+            greatpages_ngrok_url,
+            greatpages_default_campaign_id,
+            exclusion_enabled,
+            exclusion_token,
+            exclusion_group_ids
+        } = req.body;
 
-        console.log('📝 Updating API settings:', { webhook_enabled, require_token, round_robin_enabled, greatpages_ngrok_url, greatpages_default_campaign_id });
+        console.log('📝 Updating API settings:', req.body);
 
         const updateData = {};
         if (typeof webhook_enabled === 'boolean') updateData.webhook_enabled = webhook_enabled;
@@ -64,6 +77,12 @@ router.patch('/api', async (req, res) => {
         if (typeof round_robin_enabled === 'boolean') updateData.round_robin_enabled = round_robin_enabled;
         if (greatpages_ngrok_url !== undefined) updateData.greatpages_ngrok_url = greatpages_ngrok_url;
         if (greatpages_default_campaign_id !== undefined) updateData.greatpages_default_campaign_id = greatpages_default_campaign_id;
+
+        // Exclusion API updates
+        if (typeof exclusion_enabled === 'boolean') updateData.exclusion_enabled = exclusion_enabled;
+        if (exclusion_token !== undefined) updateData.exclusion_token = exclusion_token;
+        if (exclusion_group_ids !== undefined) updateData.exclusion_group_ids = exclusion_group_ids;
+
         if (regenerate_token) updateData.webhook_token = uuidv4();
 
         console.log('📝 Update data:', updateData);

@@ -438,6 +438,42 @@ export async function forceGroupSync(connectionId) {
 }
 
 /**
+ * Remover participante de um grupo
+ * @param {string} connectionId - ID da conexão
+ * @param {string} groupId - ID do grupo (JID)
+ * @param {string} participantId - ID do participante (JID/Telefone com @s.whatsapp.net)
+ */
+export async function removeParticipant(connectionId, groupId, participantId) {
+    const sock = activeConnections.get(connectionId);
+    if (!sock) {
+        throw new Error('Conexão não está ativa.');
+    }
+
+    try {
+        console.log(`🔨 Removendo participante ${participantId} do grupo ${groupId}...`);
+
+        // Formatar participantId se necessário (adicionar @s.whatsapp.net se for só número)
+        let jid = participantId;
+        if (!jid.includes('@')) {
+            jid = `${jid}@s.whatsapp.net`;
+        }
+
+        // Executar remoção
+        await sock.groupParticipantsUpdate(
+            groupId,
+            [jid],
+            'remove' // action: add, remove, promote, demote
+        );
+
+        console.log(`✅ Participante ${jid} removido com sucesso!`);
+        return true;
+    } catch (error) {
+        console.error(`❌ Erro ao remover participante:`, error);
+        throw error;
+    }
+}
+
+/**
  * Restaurar sessões ativas ao iniciar o servidor
  */
 export async function restoreSessions() {

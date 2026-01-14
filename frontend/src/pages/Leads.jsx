@@ -69,6 +69,13 @@ export default function Leads() {
     const [reassignTarget, setReassignTarget] = useState('');
     const [reassigning, setReassigning] = useState(false);
 
+    // Edit Lead Details
+    const [editMode, setEditMode] = useState(false);
+    const [editedName, setEditedName] = useState('');
+    const [editedEmail, setEditedEmail] = useState('');
+    const [editedPhone, setEditedPhone] = useState('');
+    const [saving, setSaving] = useState(false);
+
     // Atualizar ref quando filtros mudam
     useEffect(() => {
         filtersRef.current = { search, searchByObservation, statusFilter, campaignFilter, subcampaignFilter, inGroupFilter, sellerFilter, page };
@@ -532,6 +539,61 @@ export default function Leads() {
             console.error('Erro ao criar agendamento:', e);
         }
     };
+
+    // Funções de Edição de Lead
+    const startEdit = () => {
+        setEditedName(selectedLead.first_name || '');
+        setEditedEmail(selectedLead.email || '');
+        setEditedPhone(selectedLead.phone || '');
+        setEditMode(true);
+    };
+
+    const cancelEdit = () => {
+        setEditMode(false);
+        setEditedName('');
+        setEditedEmail('');
+        setEditedPhone('');
+    };
+
+    const saveLeadDetails = async () => {
+        if (!editedName.trim()) {
+            alert('Nome é obrigatório');
+            return;
+        }
+
+        // Validação de email
+        if (editedEmail && editedEmail.trim()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(editedEmail.trim())) {
+                alert('Formato de email inválido');
+                return;
+            }
+        }
+
+        setSaving(true);
+        try {
+            const result = await api.updateLeadDetails(selectedLead.uuid, {
+                first_name: editedName.trim(),
+                email: editedEmail.trim() || null,
+                phone: editedPhone.trim() || null
+            });
+
+            // Atualizar o lead selecionado com os novos dados
+            setSelectedLead(result.lead);
+            setEditMode(false);
+
+            // Recarregar a lista de leads
+            loadLeads();
+
+            alert('✅ Lead atualizado com sucesso!');
+        } catch (error) {
+            console.error('Erro ao salvar:', error);
+            alert('❌ Erro ao atualizar lead: ' + (error.message || 'Tente novamente'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
 
     // Verificar se lead tem observação (ícone verde)
     const hasNote = (lead) => {
@@ -1168,12 +1230,95 @@ export default function Leads() {
                     <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
                         <div className="modal slide-up" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflowY: 'auto' }}>
                             <div className="modal-header">
-                                <h3>{selectedLead.first_name}</h3>
-                                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedLead(null)}><X size={18} /></button>
+                                <h3>{editMode ? 'Editar Lead' : selectedLead.first_name}</h3>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {!editMode && (
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            onClick={startEdit}
+                                            style={{ fontSize: '0.875rem' }}
+                                        >
+                                            ✏️ Editar
+                                        </button>
+                                    )}
+                                    <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedLead(null); setEditMode(false); }}><X size={18} /></button>
+                                </div>
                             </div>
                             <div style={{ marginBottom: 16 }}>
-                                <p><strong>Email:</strong> {selectedLead.email}</p>
-                                <p><strong>Telefone:</strong> {selectedLead.phone || '-'}</p>
+                                {/* Nome */}
+                                <div style={{ marginBottom: 12 }}>
+                                    <strong>Nome:</strong>
+                                    {editMode ? (
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            value={editedName}
+                                            onChange={e => setEditedName(e.target.value)}
+                                            placeholder="Nome do lead"
+                                            style={{ marginTop: 4, width: '100%' }}
+                                        />
+                                    ) : (
+                                        <span style={{ marginLeft: 8 }}>{selectedLead.first_name || '-'}</span>
+                                    )}
+                                </div>
+
+                                {/* Email */}
+                                <div style={{ marginBottom: 12 }}>
+                                    <strong>Email:</strong>
+                                    {editMode ? (
+                                        <input
+                                            type="email"
+                                            className="form-input"
+                                            value={editedEmail}
+                                            onChange={e => setEditedEmail(e.target.value)}
+                                            placeholder="email@exemplo.com"
+                                            style={{ marginTop: 4, width: '100%' }}
+                                        />
+                                    ) : (
+                                        <span style={{ marginLeft: 8 }}>{selectedLead.email || '-'}</span>
+                                    )}
+                                </div>
+
+                                {/* Telefone */}
+                                <div style={{ marginBottom: 12 }}>
+                                    <strong>Telefone:</strong>
+                                    {editMode ? (
+                                        <input
+                                            type="tel"
+                                            className="form-input"
+                                            value={editedPhone}
+                                            onChange={e => setEditedPhone(e.target.value)}
+                                            placeholder="(00) 00000-0000"
+                                            style={{ marginTop: 4, width: '100%' }}
+                                        />
+                                    ) : (
+                                        <span style={{ marginLeft: 8 }}>{selectedLead.phone || '-'}</span>
+                                    )}
+                                </div>
+
+                                {/* Botões de Salvar/Cancelar */}
+                                {editMode && (
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 16, marginBottom: 16 }}>
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={saveLeadDetails}
+                                            disabled={saving}
+                                            style={{ flex: 1 }}
+                                        >
+                                            {saving ? '💾 Salvando...' : '💾 Salvar'}
+                                        </button>
+                                        <button
+                                            className="btn btn-ghost"
+                                            onClick={cancelEdit}
+                                            disabled={saving}
+                                            style={{ flex: 1 }}
+                                        >
+                                            ❌ Cancelar
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Informações não editáveis */}
                                 <p><strong>Produto:</strong> {selectedLead.product_name}</p>
                                 <p><strong>Entrou no grupo:</strong>
                                     <span style={{ marginLeft: 8, color: selectedLead.in_group ? '#10b981' : '#f59e0b' }}>
@@ -1181,7 +1326,7 @@ export default function Leads() {
                                     </span>
                                 </p>
                                 {selectedLead.campaign_name && <p><strong>Campanha:</strong> {selectedLead.campaign_name}</p>}
-                                {selectedLead.phone && <a href={`https://wa.me/${formatPhone(selectedLead.phone)}`} target="_blank" rel="noopener" className="whatsapp-btn" style={{ marginTop: 12 }}><Phone size={14} /> Abrir WhatsApp</a>}
+                                {selectedLead.phone && !editMode && <a href={`https://wa.me/${formatPhone(selectedLead.phone)}`} target="_blank" rel="noopener" className="whatsapp-btn" style={{ marginTop: 12 }}><Phone size={14} /> Abrir WhatsApp</a>}
                             </div>
 
                             {/* Seção de Agendamento */}

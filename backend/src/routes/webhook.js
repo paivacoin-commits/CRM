@@ -370,4 +370,99 @@ router.post('/greatpages', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/webhook/exclusion
+ * Remove contatos dos grupos selecionados
+ */
+router.post('/exclusion', async (req, res) => {
+    try {
+        console.log('🗑️ Exclusion Webhook received');
+
+        // Verificar se webhook está habilitado
+        const settings = await db.getApiSettings();
+
+        if (!settings || !settings.exclusion_enabled) {
+            return res.status(403).json({ error: 'Webhook de exclusão desabilitado' });
+        }
+
+        // Verificar token
+        const authHeader = req.headers.authorization;
+        const token = authHeader?.replace('Bearer ', '') || req.query.token;
+
+        if (!token || token !== settings.exclusion_token) {
+            return res.status(401).json({ error: 'Token inválido' });
+        }
+
+        const body = req.body;
+        // Tentar pegar telefone de vários campos possíveis
+        let phone = body.phone || body.telefone || body.whatsapp || body.celular || body.phone_number;
+
+        // Se vier do Hotmart, pode estar aninhado
+        if (!phone && (body.data?.buyer?.phone || body.buyer?.phone)) {
+            phone = body.data?.buyer?.phone || body.buyer?.phone;
+        }
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Telefone não encontrado no payload' });
+        }
+
+        // Normalizar telefone
+        phone = normalizePhone(phone);
+        console.log(`   📞 Telefone para exclusão: ${phone}`);
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Telefone inválido' });
+        }
+
+        // Obter grupos configurados para exclusão
+        const excludedGroupIds = settings.exclusion_group_ids;
+        if (!excludedGroupIds || !Array.isArray(excludedGroupIds) || excludedGroupIds.length === 0) {
+            console.log('   ⚠️ Nenhum grupo configurado para exclusão');
+            return res.json({ success: true, message: 'Nenhum grupo configurado para exclusão' });
+        }
+
+        console.log(`   🎯 Grupos alvo: ${excludedGroupIds.length} grupos`);
+
+        // Importar service dinamicamente para evitar ciclo ou carregar desnecessariamente
+        const { removeParticipant } = await import('../services/whatsappService.js');
+
+        // Para cada grupo, descobrir a conexão e remover
+        const results = [];
+
+        for (const groupId of excludedGroupIds) {
+            // Buscar conexão dona deste grupo
+            const { data: groupData, error } = await supabase
+                .from('whatsapp_groups')
+                .select('connection_id, group_name')
+                .eq('group_id', groupId)
+                .single();
+
+            if (error || !groupData) {
+                console.error(`   ❌ Grupo ${groupId} não encontrado no banco`);
+                results.push({ groupId, success: false, error: 'Grupo não encontrado' });
+                continue;
+            }
+
+            try {
+                // Tentar remover
+                await removeParticipant(groupData.connection_id, groupId, phone);
+                results.push({ groupId, groupName: groupData.group_name, success: true });
+            } catch (err) {
+                console.error(`   ❌ Erro ao remover do grupo ${groupData.group_name}:`, err.message);
+                results.push({ groupId, groupName: groupData.group_name, success: false, error: err.message });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Processamento de exclusão concluído',
+            results
+        });
+
+    } catch (error) {
+        console.error('Exclusion Webhook Error:', error);
+        res.status(500).json({ error: 'Erro interno ao processar webhook de exclusão' });
+    }
+});
+
 export default router;

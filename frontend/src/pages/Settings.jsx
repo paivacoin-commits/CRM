@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
-import { Settings as SettingsIcon, Key, Download, Upload, ArrowUpDown, Copy, Check, RefreshCw, GripVertical, X, History, RotateCcw, Trash2, Tags, Plus, Edit2, MessageCircle, Database, Plug, Zap, FileText } from 'lucide-react';
+import { Settings as SettingsIcon, Key, Download, Upload, ArrowUpDown, Copy, Check, RefreshCw, GripVertical, X, History, RotateCcw, Trash2, Tags, Plus, Edit2, MessageCircle, Database, Plug, Zap, FileText, Shield } from 'lucide-react';
 import HotmartSettings from '../components/HotmartSettings';
+import ExclusionSettings from '../components/ExclusionSettings';
 
 export default function Settings() {
     const [activeTab, setActiveTab] = useState('api');
@@ -20,6 +21,8 @@ export default function Settings() {
 
                     <TabButton active={activeTab === 'hotmart'} onClick={() => setActiveTab('hotmart')} icon={<Zap size={16} />} label="Hotmart" />
                     <TabButton active={activeTab === 'greatpages'} onClick={() => setActiveTab('greatpages')} icon={<Plug size={16} />} label="GreatPages" />
+                    <TabButton active={activeTab === 'exclusion'} onClick={() => setActiveTab('exclusion')} icon={<Shield size={16} />} label="Exclusão" />
+
                     <TabButton active={activeTab === 'status'} onClick={() => setActiveTab('status')} icon={<Tags size={16} />} label="Status" />
                     <TabButton active={activeTab === 'order'} onClick={() => setActiveTab('order')} icon={<ArrowUpDown size={16} />} label="Ordem" />
                     <TabButton active={activeTab === 'backup'} onClick={() => setActiveTab('backup')} icon={<Database size={16} />} label="Backup" />
@@ -34,6 +37,7 @@ export default function Settings() {
 
             {activeTab === 'hotmart' && <HotmartSettings />}
             {activeTab === 'greatpages' && <GreatPagesSettings />}
+            {activeTab === 'exclusion' && <ExclusionSettings />}
             {activeTab === 'status' && <StatusSettings />}
             {activeTab === 'order' && <DistributionOrder />}
             {activeTab === 'backup' && <BackupSettings />}
