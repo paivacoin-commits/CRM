@@ -425,40 +425,132 @@ router.post('/exclusion', async (req, res) => {
         }
 
         console.log(`   🎯 Grupos alvo: ${excludedGroupIds.length} grupos`);
+        console.log(`   📞 Telefone normalizado: ${phone}`);
 
         // Importar service dinamicamente para evitar ciclo ou carregar desnecessariamente
-        const { removeParticipant } = await import('../services/whatsappService.js');
+        const { removeParticipant, getConnectionStatus } = await import('../services/whatsappService.js');
 
         // Para cada grupo, descobrir a conexão e remover
         const results = [];
+        let processedCount = 0;
 
         for (const groupId of excludedGroupIds) {
+            processedCount++;
+            console.log(`\n   📋 [${processedCount}/${excludedGroupIds.length}] Processando grupo: ${groupId}`);
+
             // Buscar conexão dona deste grupo
             const { data: groupData, error } = await supabase
                 .from('whatsapp_groups')
-                .select('connection_id, group_name')
+                .select('connection_id, group_name, participant_count')
                 .eq('group_id', groupId)
                 .single();
 
             if (error || !groupData) {
-                console.error(`   ❌ Grupo ${groupId} não encontrado no banco`);
-                results.push({ groupId, success: false, error: 'Grupo não encontrado' });
+                const errorMsg = `Grupo não encontrado no banco de dados`;
+                console.error(`   ❌ ${errorMsg}`);
+                console.error(`   🔍 Detalhes: ${error?.message || 'Grupo não existe na tabela whatsapp_groups'}`);
+                results.push({
+                    groupId,
+                    success: false,
+                    error: errorMsg,
+                    details: error?.message || 'Grupo não cadastrado'
+                });
                 continue;
             }
 
+            console.log(`   📱 Grupo: ${groupData.group_name}`);
+            console.log(`   🔗 Connection ID: ${groupData.connection_id}`);
+            console.log(`   👥 Participantes: ${groupData.participant_count || 'N/A'}`);
+
+            // Verificar status da conexão
             try {
+                const connectionStatus = await getConnectionStatus(groupData.connection_id);
+                console.log(`   🔌 Status da conexão: ${connectionStatus ? 'Conectado' : 'Desconectado'}`);
+
+                if (!connectionStatus) {
+                    const errorMsg = 'WhatsApp desconectado';
+                    console.error(`   ❌ ${errorMsg} - Não é possível remover participante`);
+                    results.push({
+                        groupId,
+                        groupName: groupData.group_name,
+                        success: false,
+                        error: errorMsg,
+                        details: 'A conexão WhatsApp não está ativa. Reconecte o WhatsApp e tente novamente.'
+                    });
+                    continue;
+                }
+            } catch (statusErr) {
+                console.error(`   ⚠️ Não foi possível verificar status da conexão: ${statusErr.message}`);
+                // Continua tentando remover mesmo sem verificar status
+            }
+
+            try {
+                console.log(`   🗑️ Tentando remover ${phone} do grupo...`);
+
                 // Tentar remover
                 await removeParticipant(groupData.connection_id, groupId, phone);
-                results.push({ groupId, groupName: groupData.group_name, success: true });
+
+                console.log(`   ✅ Removido com sucesso!`);
+                results.push({
+                    groupId,
+                    groupName: groupData.group_name,
+                    success: true,
+                    message: 'Participante removido com sucesso'
+                });
+
             } catch (err) {
-                console.error(`   ❌ Erro ao remover do grupo ${groupData.group_name}:`, err.message);
-                results.push({ groupId, groupName: groupData.group_name, success: false, error: err.message });
+                // Análise detalhada do erro
+                let errorReason = err.message;
+                let errorDetails = '';
+
+                if (err.message?.includes('participant-not-found') || err.message?.includes('not a participant')) {
+                    errorReason = 'Participante não encontrado no grupo';
+                    errorDetails = 'O número não está neste grupo ou já foi removido anteriormente';
+                } else if (err.message?.includes('not-authorized') || err.message?.includes('forbidden')) {
+                    errorReason = 'Sem permissão para remover';
+                    errorDetails = 'O bot não tem permissão de admin neste grupo';
+                } else if (err.message?.includes('rate-overlimit')) {
+                    errorReason = 'Limite de requisições atingido';
+                    errorDetails = 'WhatsApp bloqueou temporariamente. Aguarde alguns minutos';
+                } else if (err.message?.includes('connection')) {
+                    errorReason = 'Erro de conexão';
+                    errorDetails = 'Conexão WhatsApp instável ou desconectada';
+                } else {
+                    errorDetails = err.message;
+                }
+
+                console.error(`   ❌ Falha ao remover: ${errorReason}`);
+                console.error(`   📝 Detalhes: ${errorDetails}`);
+                console.error(`   🔍 Stack: ${err.stack?.split('\n')[0]}`);
+
+                results.push({
+                    groupId,
+                    groupName: groupData.group_name,
+                    success: false,
+                    error: errorReason,
+                    details: errorDetails
+                });
             }
         }
+
+        // Resumo final
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = results.filter(r => !r.success).length;
+
+        console.log(`\n   📊 RESUMO DA EXCLUSÃO:`);
+        console.log(`   ✅ Sucessos: ${successCount}`);
+        console.log(`   ❌ Erros: ${errorCount}`);
+        console.log(`   📋 Total processado: ${results.length}`);
 
         res.json({
             success: true,
             message: 'Processamento de exclusão concluído',
+            phone: phone,
+            summary: {
+                total: results.length,
+                success: successCount,
+                errors: errorCount
+            },
             results
         });
 
