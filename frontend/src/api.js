@@ -110,5 +110,5 @@ export const api = {
     // Groups
     getAllWhatsAppGroups: () => request('/whatsapp-groups/groups'),
     // Exclusion
-    getExclusionLogs: (params = {}) => request(`/webhook/exclusion/logs?${new URLSearchParams(params)}`),
+    getExclusionLogs: (params = {}) => request(`/exclusion-logs?${new URLSearchParams(params)}`),
 };
