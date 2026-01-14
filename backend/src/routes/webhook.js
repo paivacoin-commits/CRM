@@ -542,6 +542,30 @@ router.post('/exclusion', async (req, res) => {
         console.log(`   ❌ Erros: ${errorCount}`);
         console.log(`   📋 Total processado: ${results.length}`);
 
+        // Salvar log no banco de dados
+        try {
+            const logData = {
+                phone: phone,
+                groups_processed: results.length,
+                groups_success: successCount,
+                groups_failed: errorCount,
+                results: results,
+                created_at: new Date().toISOString()
+            };
+
+            const { error: logError } = await supabase
+                .from('exclusion_logs')
+                .insert(logData);
+
+            if (logError) {
+                console.error('   ⚠️ Erro ao salvar log no banco:', logError.message);
+            } else {
+                console.log('   💾 Log salvo no banco de dados com sucesso!');
+            }
+        } catch (logErr) {
+            console.error('   ⚠️ Falha ao salvar log:', logErr.message);
+        }
+
         res.json({
             success: true,
             message: 'Processamento de exclusão concluído',
