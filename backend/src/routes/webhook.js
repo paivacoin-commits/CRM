@@ -542,28 +542,33 @@ router.post('/exclusion', async (req, res) => {
         console.log(`   ❌ Erros: ${errorCount}`);
         console.log(`   📋 Total processado: ${results.length}`);
 
-        // Salvar log no banco de dados
+        // Salvar log no banco de dados - um registro por grupo
         try {
-            const logData = {
-                phone: phone,
-                groups_processed: results.length,
-                groups_success: successCount,
-                groups_failed: errorCount,
-                results: results,
-                created_at: new Date().toISOString()
-            };
+            console.log('   💾 Salvando logs no banco de dados...');
 
-            const { error: logError } = await supabase
+            const logsToInsert = results.map(result => ({
+                phone: phone,
+                group_id: result.groupId,
+                group_name: result.groupName || 'Grupo desconhecido',
+                status: result.success ? 'success' : 'error',
+                error_message: result.success ? null : `${result.error}${result.details ? ': ' + result.details : ''}`,
+                created_at: new Date().toISOString()
+            }));
+
+            const { data, error: logError } = await supabase
                 .from('exclusion_logs')
-                .insert(logData);
+                .insert(logsToInsert)
+                .select();
 
             if (logError) {
-                console.error('   ⚠️ Erro ao salvar log no banco:', logError.message);
+                console.error('   ⚠️ Erro ao salvar logs no banco:', logError.message);
+                console.error('   🔍 Detalhes:', logError);
             } else {
-                console.log('   💾 Log salvo no banco de dados com sucesso!');
+                console.log(`   ✅ ${data.length} logs salvos no banco de dados com sucesso!`);
             }
         } catch (logErr) {
-            console.error('   ⚠️ Falha ao salvar log:', logErr.message);
+            console.error('   ⚠️ Falha ao salvar logs:', logErr.message);
+            console.error('   🔍 Stack:', logErr.stack);
         }
 
         res.json({
