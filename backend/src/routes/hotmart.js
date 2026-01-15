@@ -78,25 +78,38 @@ function normalizePhone(phone) {
 }
 
 /**
- * POST /api/hotmart/webhook
- * Receive Hotmart purchase notifications (public endpoint)
+ * POST /api/hotmart/webhook/:number
+ * Receive Hotmart purchase notifications (public endpoint with webhook number)
  */
-router.post('/webhook', async (req, res) => {
+router.post('/webhook:number(\\d+)?', async (req, res) => {
     try {
         const payload = req.body;
-        console.log('📥 Hotmart webhook received:', JSON.stringify(payload, null, 2));
+        const webhookNumber = parseInt(req.params.number) || 1; // Default to webhook1 if no number
+        console.log(`📥 Hotmart webhook${webhookNumber} received:`, JSON.stringify(payload, null, 2));
 
-        // Get Hotmart settings
+        // Get webhook configuration
+        const { data: config } = await supabase
+            .from('hotmart_webhook_configs')
+            .select('*')
+            .eq('webhook_number', webhookNumber)
+            .single();
+
+        if (!config) {
+            console.log(`❌ Webhook configuration ${webhookNumber} not found`);
+            return res.status(404).json({ error: 'Webhook configuration not found' });
+        }
+
+        if (!config.is_enabled) {
+            console.log(`⚠️ Webhook ${webhookNumber} is disabled, ignoring`);
+            return res.status(200).json({ message: 'Webhook disabled' });
+        }
+
+        // Get global settings for distribution
         const { data: settings } = await supabase
             .from('hotmart_settings')
             .select('*')
             .eq('id', 1)
             .single();
-
-        if (!settings || !settings.enable_auto_import) {
-            console.log('⚠️ Auto import disabled, ignoring webhook');
-            return res.status(200).json({ message: 'Auto import disabled' });
-        }
 
         // Extract lead data from payload
         const leadData = extractLeadData(payload);
@@ -156,7 +169,7 @@ router.post('/webhook', async (req, res) => {
                     email: leadData.email,
                     phone: normalizePhone(leadData.phone),
                     product: leadData.product,
-                    campaign_id: settings.default_campaign_id,
+                    campaign_id: config.campaign_id, // Use campaign from webhook config
                     seller_id: sellerId,
                     status_id: null, // Explicitamente null para mostrar "-selecione-"
                     in_group: false
@@ -180,7 +193,8 @@ router.post('/webhook', async (req, res) => {
             leadUuid,
             leadData.email,
             leadData.name,
-            leadData.product
+            leadData.product,
+            config.id // Add webhook config ID to log
         );
 
         res.status(200).json({
@@ -191,8 +205,111 @@ router.post('/webhook', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error processing Hotmart webhook:', error);
-        await logWebhook(req.body, 'error', error.message, null, null, null, null);
+        await logWebhook(req.body, 'error', error.message, null, null, null, null, null);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * GET /api/hotmart/configs
+ * Get all webhook configurations
+ */
+router.get('/configs', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { data: configs } = await supabase
+            .from('hotmart_webhook_configs')
+            .select('*')
+            .order('webhook_number');
+
+        res.json({ configs: configs || [] });
+    } catch (error) {
+        console.error('Error fetching webhook configs:', error);
+        res.status(500).json({ error: 'Erro ao buscar configurações de webhook' });
+    }
+});
+
+/**
+ * POST /api/hotmart/configs
+ * Create new webhook configuration
+ */
+router.post('/configs', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { campaign_id, webhook_secret } = req.body;
+
+        // Find next available webhook number
+        const { data: existingConfigs } = await supabase
+            .from('hotmart_webhook_configs')
+            .select('webhook_number')
+            .order('webhook_number', { ascending: false })
+            .limit(1);
+
+        const nextNumber = existingConfigs && existingConfigs.length > 0
+            ? existingConfigs[0].webhook_number + 1
+            : 1;
+
+        const { data: config } = await supabase
+            .from('hotmart_webhook_configs')
+            .insert({
+                webhook_number: nextNumber,
+                campaign_id,
+                webhook_secret,
+                is_enabled: true
+            })
+            .select()
+            .single();
+
+        res.json({ message: 'Webhook criado com sucesso', config });
+    } catch (error) {
+        console.error('Error creating webhook config:', error);
+        res.status(500).json({ error: 'Erro ao criar webhook' });
+    }
+});
+
+/**
+ * PUT /api/hotmart/configs/:id
+ * Update webhook configuration
+ */
+router.put('/configs/:id', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { campaign_id, webhook_secret, is_enabled } = req.body;
+
+        const { data: config } = await supabase
+            .from('hotmart_webhook_configs')
+            .update({
+                campaign_id,
+                webhook_secret,
+                is_enabled,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        res.json({ message: 'Webhook atualizado com sucesso', config });
+    } catch (error) {
+        console.error('Error updating webhook config:', error);
+        res.status(500).json({ error: 'Erro ao atualizar webhook' });
+    }
+});
+
+/**
+ * DELETE /api/hotmart/configs/:id
+ * Delete webhook configuration
+ */
+router.delete('/configs/:id', authenticate, authorize('admin'), async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        await supabase
+            .from('hotmart_webhook_configs')
+            .delete()
+            .eq('id', id);
+
+        res.json({ message: 'Webhook deletado com sucesso' });
+    } catch (error) {
+        console.error('Error deleting webhook config:', error);
+        res.status(500).json({ error: 'Erro ao deletar webhook' });
     }
 });
 
@@ -435,7 +552,7 @@ async function getNextSeller() {
     }
 }
 
-async function logWebhook(payload, status, errorMessage, leadUuid, buyerEmail, buyerName, productName) {
+async function logWebhook(payload, status, errorMessage, leadUuid, buyerEmail, buyerName, productName, webhookConfigId = null) {
     try {
         const eventType = payload?.event || 'UNKNOWN';
 
@@ -449,7 +566,8 @@ async function logWebhook(payload, status, errorMessage, leadUuid, buyerEmail, b
                 lead_uuid: leadUuid,
                 buyer_email: buyerEmail,
                 buyer_name: buyerName,
-                product_name: productName
+                product_name: productName,
+                webhook_config_id: webhookConfigId
             });
     } catch (error) {
         console.error('Error logging webhook:', error);

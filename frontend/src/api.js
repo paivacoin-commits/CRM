@@ -107,6 +107,11 @@ export const api = {
     generateHotmartSecret: () => request('/hotmart/generate-secret', { method: 'POST' }),
     getHotmartLogs: (params = {}) => request(`/hotmart/logs?${new URLSearchParams(params)}`),
     testHotmartWebhook: () => request('/hotmart/test', { method: 'POST' }),
+    // Hotmart Webhook Configs
+    getHotmartConfigs: () => request('/hotmart/configs'),
+    createHotmartConfig: (data) => request('/hotmart/configs', { method: 'POST', body: JSON.stringify(data) }),
+    updateHotmartConfig: (id, data) => request(`/hotmart/configs/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteHotmartConfig: (id) => request(`/hotmart/configs/${id}`, { method: 'DELETE' }),
     // Groups
     getAllWhatsAppGroups: () => request('/whatsapp-groups/groups'),
     // Exclusion

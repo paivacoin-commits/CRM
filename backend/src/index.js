@@ -29,6 +29,7 @@ import wappiRoutes from './routes/wappi.js';
 import groupSyncRoutes from './routes/groupSync.js';
 import hotmartRoutes from './routes/hotmart.js';
 import exclusionLogsRoutes from './routes/exclusionLogs.js';
+import cartAbandonmentRoutes from './routes/cartAbandonment.js';
 import { restoreSessions } from './services/whatsappService.js';
 
 const PORT = process.env.PORT || 3001;
@@ -89,6 +90,7 @@ app.use('/api/wappi', wappiRoutes);
 app.use('/api/group-sync', groupSyncRoutes);
 app.use('/api/hotmart', hotmartRoutes);
 app.use('/api/exclusion-logs', exclusionLogsRoutes);
+app.use('/api/cart-abandonment', cartAbandonmentRoutes);
 
 
 
