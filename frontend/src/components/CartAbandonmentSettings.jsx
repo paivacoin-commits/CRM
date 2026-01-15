@@ -32,7 +32,7 @@ export default function CartAbandonmentSettings() {
 
     const loadSettings = async () => {
         try {
-            const response = await fetch('/api/cart-abandonment/settings', {
+            const response = await fetch(`${baseUrl}/api/cart-abandonment/settings`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
@@ -59,7 +59,7 @@ export default function CartAbandonmentSettings() {
 
     const loadEvents = async () => {
         try {
-            const response = await fetch('/api/cart-abandonment/events?limit=20', {
+            const response = await fetch(`${baseUrl}/api/cart-abandonment/events?limit=20`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 }
@@ -74,7 +74,7 @@ export default function CartAbandonmentSettings() {
     const handleSaveSettings = async () => {
         setSaving(true);
         try {
-            const response = await fetch('/api/cart-abandonment/settings', {
+            const response = await fetch(`${baseUrl}/api/cart-abandonment/settings`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -103,7 +103,7 @@ export default function CartAbandonmentSettings() {
 
         setTesting(true);
         try {
-            const response = await fetch('/api/cart-abandonment/test-connection', {
+            const response = await fetch(`${baseUrl}/api/cart-abandonment/test-connection`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
