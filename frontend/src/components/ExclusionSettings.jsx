@@ -245,6 +245,7 @@ export default function ExclusionSettings() {
                     <Trash2 size={20} />
                     Logs de Exclusão (Últimas Ações)
                 </h4>
+                {console.log('🎨 [ExclusionLogs] Rendering table section. Logs count:', logs.length)}
                 <div style={{ background: 'var(--bg-secondary)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {logs.length === 0 ? (
                         <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>

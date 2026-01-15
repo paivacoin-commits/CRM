@@ -376,12 +376,18 @@ router.post('/greatpages', async (req, res) => {
  */
 router.post('/exclusion', async (req, res) => {
     try {
-        console.log('🗑️ Exclusion Webhook received');
+        console.log('🗑️🗑️🗑️ EXCLUSION WEBHOOK RECEIVED 🗑️🗑️🗑️');
+        console.log('Headers:', JSON.stringify(req.headers, null, 2));
+        console.log('Body:', JSON.stringify(req.body, null, 2));
+        console.log('Query:', JSON.stringify(req.query, null, 2));
 
         // Verificar se webhook está habilitado
         const settings = await db.getApiSettings();
+        console.log('Settings loaded:', settings ? 'YES' : 'NO');
+        console.log('Exclusion enabled:', settings?.exclusion_enabled);
 
         if (!settings || !settings.exclusion_enabled) {
+            console.log('⚠️ Webhook de exclusão desabilitado');
             return res.status(403).json({ error: 'Webhook de exclusão desabilitado' });
         }
 
