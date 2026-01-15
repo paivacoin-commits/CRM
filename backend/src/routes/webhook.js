@@ -406,12 +406,20 @@ router.post('/exclusion', async (req, res) => {
         // Tentar pegar telefone de vários campos possíveis
         let phone = body.phone || body.telefone || body.whatsapp || body.celular || body.phone_number;
 
-        // Se vier do Hotmart, pode estar aninhado
-        if (!phone && (body.data?.buyer?.phone || body.buyer?.phone)) {
-            phone = body.data?.buyer?.phone || body.buyer?.phone;
+        // Se vier do Hotmart, pode estar aninhado em vários lugares
+        if (!phone && body.data?.buyer) {
+            phone = body.data.buyer.checkout_phone || body.data.buyer.phone;
         }
 
+        // Fallback para buyer direto (sem data)
+        if (!phone && body.buyer) {
+            phone = body.buyer.checkout_phone || body.buyer.phone;
+        }
+
+        console.log(`   📱 Telefone bruto extraído: ${phone}`);
+
         if (!phone) {
+            console.log('   ❌ Telefone não encontrado no payload');
             return res.status(400).json({ error: 'Telefone não encontrado no payload' });
         }
 
