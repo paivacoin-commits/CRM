@@ -11,7 +11,12 @@ export default function CartAbandonmentSettings() {
     const [testing, setTesting] = useState(false);
     const [copied, setCopied] = useState(false);
 
-    const baseUrl = window.location.origin.replace('5173', '3001');
+    // Detecta se está em localhost ou produção
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = isLocalhost
+        ? window.location.origin.replace('5173', '3001')  // Local: http://localhost:3001
+        : 'https://crmsales-recovery-crm-api.onrender.com'; // Produção: URL do backend no Render
+
     const webhookUrl = `${baseUrl}/api/cart-abandonment/webhook`;
 
     useEffect(() => {
