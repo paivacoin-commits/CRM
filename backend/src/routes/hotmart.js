@@ -113,10 +113,12 @@ router.post('/webhook:number(\\d+)?', async (req, res) => {
             return res.status(400).json({ error: 'Invalid payload' });
         }
 
-        // Check for duplicate lead
+        // Check for duplicate lead in the SAME CAMPAIGN
+        // This allows the same email/phone to exist in different campaigns
         const { data: existingLead } = await supabase
             .from('leads')
             .select('uuid')
+            .eq('campaign_id', config.campaign_id)
             .or(`email.eq.${leadData.email},phone.eq.${leadData.phone}`)
             .limit(1)
             .single();
