@@ -104,13 +104,6 @@ router.post('/webhook:number(\\d+)?', async (req, res) => {
             return res.status(200).json({ message: 'Webhook disabled' });
         }
 
-        // Get global settings for distribution
-        const { data: settings } = await supabase
-            .from('hotmart_settings')
-            .select('*')
-            .eq('id', 1)
-            .single();
-
         // Extract lead data from payload
         const leadData = extractLeadData(payload);
 
@@ -154,9 +147,9 @@ router.post('/webhook:number(\\d+)?', async (req, res) => {
             const uuid = crypto.randomUUID();
             leadUuid = uuid;
 
-            // Determine seller_id if distribution is enabled
+            // Determine seller_id if distribution is enabled for this webhook
             let sellerId = null;
-            if (settings.enable_distribution) {
+            if (config.enable_round_robin) {
                 sellerId = await getNextSeller();
             }
 
@@ -234,7 +227,7 @@ router.get('/configs', authenticate, authorize('admin'), async (req, res) => {
  */
 router.post('/configs', authenticate, authorize('admin'), async (req, res) => {
     try {
-        const { campaign_id, webhook_secret } = req.body;
+        const { campaign_id, webhook_secret, enable_round_robin } = req.body;
 
         // Find next available webhook number
         const { data: existingConfigs } = await supabase
@@ -253,6 +246,7 @@ router.post('/configs', authenticate, authorize('admin'), async (req, res) => {
                 webhook_number: nextNumber,
                 campaign_id,
                 webhook_secret,
+                enable_round_robin: enable_round_robin || false,
                 is_enabled: true
             })
             .select()
@@ -272,7 +266,7 @@ router.post('/configs', authenticate, authorize('admin'), async (req, res) => {
 router.put('/configs/:id', authenticate, authorize('admin'), async (req, res) => {
     try {
         const { id } = req.params;
-        const { campaign_id, webhook_secret, is_enabled } = req.body;
+        const { campaign_id, webhook_secret, is_enabled, enable_round_robin } = req.body;
 
         const { data: config } = await supabase
             .from('hotmart_webhook_configs')
@@ -280,6 +274,7 @@ router.put('/configs/:id', authenticate, authorize('admin'), async (req, res) =>
                 campaign_id,
                 webhook_secret,
                 is_enabled,
+                enable_round_robin,
                 updated_at: new Date().toISOString()
             })
             .eq('id', id)

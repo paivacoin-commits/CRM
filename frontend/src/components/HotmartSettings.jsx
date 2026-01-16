@@ -179,32 +179,6 @@ export default function HotmartSettings() {
                 Configure múltiplos webhooks para receber leads de diferentes campanhas do Hotmart
             </p>
 
-            {/* Global Settings */}
-            <div className="card" style={{ marginBottom: 24 }}>
-                <h3>Configurações Globais</h3>
-
-                <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={settings.enable_distribution || false}
-                            onChange={(e) => setSettings({ ...settings, enable_distribution: e.target.checked })}
-                        />
-                        <span>Ativar distribuição Round-Robin</span>
-                    </label>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 28, marginTop: 4 }}>
-                        Leads serão distribuídos automaticamente para vendedoras ativas
-                    </p>
-                </div>
-
-                <button
-                    className="btn btn-primary"
-                    onClick={handleSaveSettings}
-                    disabled={saving}
-                >
-                    {saving ? 'Salvando...' : 'Salvar Configurações'}
-                </button>
-            </div>
 
             {/* Webhook Configurations */}
             <div className="card" style={{ marginBottom: 24 }}>
@@ -317,6 +291,24 @@ export default function HotmartSettings() {
                                             {config.is_enabled ? 'Ativo' : 'Desativado'}
                                         </span>
                                     </label>
+
+                                    {/* Round-Robin Toggle */}
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 12 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={config.enable_round_robin || false}
+                                            onChange={(e) => handleUpdateConfig(config.id, {
+                                                ...config,
+                                                enable_round_robin: e.target.checked
+                                            })}
+                                        />
+                                        <span style={{ fontSize: '0.875rem' }}>
+                                            Ativar distribuição Round-Robin
+                                        </span>
+                                    </label>
+                                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: 28, marginTop: 4 }}>
+                                        Leads deste webhook serão distribuídos automaticamente para vendedoras ativas
+                                    </p>
                                 </div>
                             );
                         })}
