@@ -11,7 +11,8 @@ export default function HotmartSettings() {
     const [saving, setSaving] = useState(false);
     const [copied, setCopied] = useState(null);
 
-    const baseUrl = window.location.origin.replace('5173', '3001');
+    // Use the API URL from environment variable, removing '/api' suffix for webhook URLs
+    const baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace('/api', '');
 
     useEffect(() => {
         loadData();
